@@ -85,13 +85,11 @@ struct HumorEvent: Identifiable, Codable {
 enum HumorType: String, Codable, CaseIterable {
     case heiterkeit = "Heiterkeit"      // General amusement/mirth
     case lachen = "Lachen"              // Laughing
-    case gelaechter = "Gelächter"       // Laughter (more intense)
 
     var description: String {
         switch self {
         case .heiterkeit: return "Heiterkeit (Amusement)"
         case .lachen: return "Lachen (Laughing)"
-        case .gelaechter: return "Gelächter (Laughter)"
         }
     }
 }

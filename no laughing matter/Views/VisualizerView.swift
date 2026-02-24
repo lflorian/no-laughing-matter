@@ -191,26 +191,51 @@ final class VisualizationViewModel {
             .sorted { $0.month < $1.month }
     }
 
+    // MARK: Data source
+
+    enum DataSource: Equatable {
+        case parsed       // humor_events.json  (Phase 2)
+        case classified   // classified_events.json (Phase 3)
+    }
+
+    var dataSource: DataSource = .parsed
+    var parsedCount: Int   = 0
+    var classifiedCount: Int = 0
+
     // MARK: Load
 
+    /// Probes both storage files, then loads whichever source is selected.
     func load() {
         isLoading = true
         errorMessage = nil
         do {
-            if let classified = try ClassificationStorage.shared.loadEvents(), !classified.isEmpty {
-                events = classified
+            // Always probe counts so the picker can show them
+            parsedCount     = (try? HumorEventStorage.shared.loadEvents())?.count ?? 0
+            classifiedCount = (try? ClassificationStorage.shared.loadEvents())?.count ?? 0
+
+            // Default to parsed if classified is a small subset (or doesn't exist)
+            if classifiedCount == 0 {
+                dataSource = .parsed
+            }
+
+            switch dataSource {
+            case .classified:
+                events = (try ClassificationStorage.shared.loadEvents()) ?? []
                 isClassified = true
-            } else if let unclassified = try HumorEventStorage.shared.loadEvents(), !unclassified.isEmpty {
-                events = unclassified
+            case .parsed:
+                events = (try HumorEventStorage.shared.loadEvents()) ?? []
                 isClassified = false
-            } else {
-                events = []
             }
         } catch {
             errorMessage = error.localizedDescription
             events = []
         }
         isLoading = false
+    }
+
+    func switchSource(to source: DataSource) {
+        dataSource = source
+        load()
     }
 }
 
@@ -233,10 +258,34 @@ struct VisualizerView: View {
                     .font(.callout)
             }
 
-            if !viewModel.isClassified && !viewModel.events.isEmpty {
-                Label("Showing unclassified events — run Phase 3 for intention analysis.", systemImage: "info.circle")
+            // Data source picker — always visible so the user can switch datasets
+            HStack(spacing: 12) {
+                Text("Source:")
                     .font(.callout)
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(.secondary)
+
+                Picker("Data source", selection: Binding(
+                    get: { viewModel.dataSource },
+                    set: { viewModel.switchSource(to: $0) }
+                )) {
+                    Text(viewModel.parsedCount > 0
+                         ? "All parsed events (\(viewModel.parsedCount))"
+                         : "All parsed events")
+                        .tag(VisualizationViewModel.DataSource.parsed)
+
+                    Text(viewModel.classifiedCount > 0
+                         ? "Classified only (\(viewModel.classifiedCount))"
+                         : "Classified only")
+                        .tag(VisualizationViewModel.DataSource.classified)
+                }
+                .pickerStyle(.segmented)
+                .fixedSize()
+
+                if viewModel.dataSource == .classified && viewModel.classifiedCount < viewModel.parsedCount {
+                    Label("Classified set is a subset — switch to All for the full date range.", systemImage: "info.circle")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                }
             }
 
             Divider()
@@ -295,7 +344,7 @@ struct VisualizerView: View {
         if viewModel.events.isEmpty {
             return "No data loaded yet"
         }
-        let suffix = viewModel.isClassified ? " (classified)" : " (unclassified)"
+        let suffix = viewModel.dataSource == .classified ? " (classified)" : " (all parsed)"
         return "\(viewModel.events.count) humor events\(suffix)"
     }
 
@@ -600,6 +649,20 @@ struct TrendsTab: View {
                 if data.isEmpty {
                     emptyLabel("No temporal data. Date fields may be missing or in an unrecognised format.")
                 } else {
+                    // Summary line: event count and date range
+                    let totalEvents = data.reduce(0) { $0 + $1.count }
+                    let dateRangeText: String = {
+                        guard let first = data.first?.month, let last = data.last?.month else { return "" }
+                        let fmt = DateFormatter()
+                        fmt.dateFormat = "MMM yyyy"
+                        if first == last { return fmt.string(from: first) }
+                        return "\(fmt.string(from: first)) – \(fmt.string(from: last))"
+                    }()
+                    Text("\(totalEvents) events · \(dateRangeText)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .padding(.bottom, 4)
+
                     let showMarker = data.first.map { $0.month <= afdEntry } ?? false
                         && data.last.map { $0.month >= afdEntry } ?? false
 
@@ -616,16 +679,24 @@ struct TrendsTab: View {
                                 x: .value("Month", item.month, unit: .month),
                                 y: .value("Events", item.count)
                             )
-                            .interpolationMethod(.catmullRom)
+                            .interpolationMethod(.linear)
                             .foregroundStyle(Color.accentColor.opacity(0.15))
 
                             LineMark(
                                 x: .value("Month", item.month, unit: .month),
                                 y: .value("Events", item.count)
                             )
-                            .interpolationMethod(.catmullRom)
+                            .interpolationMethod(.linear)
                             .foregroundStyle(Color.accentColor)
                             .lineStyle(StrokeStyle(lineWidth: 2))
+
+                            // Points ensure individual months are always visible
+                            PointMark(
+                                x: .value("Month", item.month, unit: .month),
+                                y: .value("Events", item.count)
+                            )
+                            .foregroundStyle(Color.accentColor)
+                            .symbolSize(30)
                         }
 
                         if showMarker {
@@ -801,7 +872,6 @@ private func humorTypeColor(_ type: HumorType) -> Color {
     switch type {
     case .heiterkeit: return .blue
     case .lachen:     return .orange
-    case .gelaechter: return .purple
     }
 }
 

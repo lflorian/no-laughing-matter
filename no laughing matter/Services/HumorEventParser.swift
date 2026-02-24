@@ -132,10 +132,6 @@ final class HumorEventParser {
 
     /// Detects the type of humor marker in a comment
     private func detectHumorType(in content: String) -> HumorType? {
-        // Check for each humor type (order matters - check more specific first)
-        if content.contains("Gelächter") {
-            return .gelaechter
-        }
         if content.contains("Heiterkeit") {
             return .heiterkeit
         }
@@ -189,8 +185,7 @@ final class HumorEventParser {
         for segment in segments {
             // Only extract parties from segments that contain a humor keyword
             guard segment.contains("Heiterkeit") ||
-                  segment.contains("Lachen") ||
-                  segment.contains("Gelächter") else { continue }
+                  segment.contains("Lachen") else { continue }
 
             for party in knownParties {
                 if segment.contains(party) {

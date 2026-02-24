@@ -439,7 +439,6 @@ struct ClassifiedEventRow: View {
         switch event.humorType {
         case .heiterkeit: return .blue
         case .lachen: return .orange
-        case .gelaechter: return .purple
         }
     }
 

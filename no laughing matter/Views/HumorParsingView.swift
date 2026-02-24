@@ -21,7 +21,7 @@ struct HumorParsingView: View {
                 .font(.title2)
                 .fontWeight(.semibold)
 
-            Text("Parse XML protocols to extract humor markers (Heiterkeit, Lachen, Gelächter) with context.")
+            Text("Parse XML protocols to extract humor markers (Heiterkeit, Lachen) with context.")
                 .foregroundStyle(.secondary)
 
             Divider()
@@ -67,7 +67,6 @@ struct HumorParsingView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Label("Heiterkeit (amusement)", systemImage: "face.smiling")
                     Label("Lachen (laughing)", systemImage: "face.smiling.inverse")
-                    Label("Gelächter (laughter)", systemImage: "theatermasks")
                 }
                 .font(.callout)
                 .foregroundStyle(.secondary)
@@ -311,7 +310,6 @@ struct HumorEventRow: View {
         switch event.humorType {
         case .heiterkeit: return .blue
         case .lachen: return .orange
-        case .gelaechter: return .purple
         }
     }
 }
