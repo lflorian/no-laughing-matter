@@ -7,6 +7,7 @@
 
 import Foundation
 import Combine
+import SwiftData
 
 /// Service for fetching Bundestag plenary protocols from the DIP API
 final class ProtocolFetcher: ObservableObject {
@@ -97,7 +98,21 @@ final class ProtocolFetcher: ObservableObject {
                 progress.message = "Period \(period): \(protocols.count + response.documents.count) protocols..."
             }
 
-            protocols.append(contentsOf: response.documents)
+            // Convert API documents to ProtocolMetadata model objects
+            let newProtocols = response.documents.map { doc in
+                ProtocolMetadata(
+                    apiId: doc.id,
+                    dokumentart: doc.dokumentart,
+                    dokumentnummer: doc.dokumentnummer,
+                    wahlperiode: doc.wahlperiode,
+                    herausgeber: doc.herausgeber,
+                    datum: doc.datum,
+                    aktualisiert: doc.aktualisiert,
+                    titel: doc.titel,
+                    fundstelle: doc.fundstelle
+                )
+            }
+            protocols.append(contentsOf: newProtocols)
 
             // Check if we've reached the end (cursor stops changing)
             if cursor == response.cursor {
@@ -261,19 +276,6 @@ final class ProtocolFetcher: ObservableObject {
         return results
     }
 
-    /// Loads cached metadata from disk
-    func loadCachedMetadata() throws -> [ProtocolMetadata]? {
-        let cacheDir = try getCacheDirectory()
-        let fileURL = cacheDir.appendingPathComponent("protocols_metadata.json")
-
-        guard FileManager.default.fileExists(atPath: fileURL.path) else {
-            return nil
-        }
-
-        let data = try Data(contentsOf: fileURL)
-        return try JSONDecoder().decode([ProtocolMetadata].self, from: data)
-    }
-
     enum XMLDownloadResult {
         case downloaded
         case skipped
@@ -285,19 +287,6 @@ final class ProtocolFetcher: ObservableObject {
         var skipped: Int = 0
         var noXML: Int = 0
         var failed: [(String, String)] = []  // (dokumentnummer, error)
-    }
-
-    /// Saves protocols to the local cache directory
-    func saveToCache(_ protocols: [ProtocolMetadata]) throws -> URL {
-        let cacheDir = try getCacheDirectory()
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = .prettyPrinted
-
-        let data = try encoder.encode(protocols)
-        let fileURL = cacheDir.appendingPathComponent("protocols_metadata.json")
-        try data.write(to: fileURL)
-
-        return fileURL
     }
 
     /// Returns the cache directory, creating it if necessary
@@ -322,15 +311,15 @@ final class ProtocolFetcher: ObservableObject {
     }
 }
 
-// MARK: - API Response Models
+// MARK: - API Response Models (used only for JSON decoding from API)
 
 struct APIResponse: Codable {
     let numFound: Int
     let cursor: String
-    let documents: [ProtocolMetadata]
+    let documents: [APIDocument]
 }
 
-struct ProtocolMetadata: Codable, Identifiable {
+struct APIDocument: Codable {
     let id: String
     let dokumentart: String
     let dokumentnummer: String
@@ -340,6 +329,21 @@ struct ProtocolMetadata: Codable, Identifiable {
     let aktualisiert: String
     let titel: String
     let fundstelle: Fundstelle
+}
+
+// MARK: - SwiftData Model
+
+@Model
+final class ProtocolMetadata {
+    var apiId: String
+    var dokumentart: String
+    var dokumentnummer: String
+    var wahlperiode: Int
+    var herausgeber: String
+    var datum: String
+    var aktualisiert: String
+    var titel: String
+    var fundstelle: Fundstelle
 
     var sessionNumber: Int? {
         // Document number format is typically "WP/SESSION" e.g. "20/42"
@@ -348,6 +352,28 @@ struct ProtocolMetadata: Codable, Identifiable {
             return session
         }
         return nil
+    }
+
+    init(
+        apiId: String,
+        dokumentart: String,
+        dokumentnummer: String,
+        wahlperiode: Int,
+        herausgeber: String,
+        datum: String,
+        aktualisiert: String,
+        titel: String,
+        fundstelle: Fundstelle
+    ) {
+        self.apiId = apiId
+        self.dokumentart = dokumentart
+        self.dokumentnummer = dokumentnummer
+        self.wahlperiode = wahlperiode
+        self.herausgeber = herausgeber
+        self.datum = datum
+        self.aktualisiert = aktualisiert
+        self.titel = titel
+        self.fundstelle = fundstelle
     }
 }
 

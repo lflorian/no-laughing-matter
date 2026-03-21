@@ -67,8 +67,7 @@ struct AnalysisTestView: View {
             }
 
             if let result {
-                Text("Reasoning: \(result.reasoning)")
-                Text("Intention: \(result.humorIntention)")
+                Text("Intention: \(result.primaryIntention)")
                 Text("Confidence: \(result.confidenceRating)")
                     .font(.headline)
             }

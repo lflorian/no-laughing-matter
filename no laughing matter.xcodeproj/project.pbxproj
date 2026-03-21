@@ -6,10 +6,6 @@
 	objectVersion = 77;
 	objects = {
 
-/* Begin PBXBuildFile section */
-		CB2E3A942F4DDF3000FA6557 /* FirebaseAI in Frameworks */ = {isa = PBXBuildFile; productRef = CB2E3A932F4DDF3000FA6557 /* FirebaseAI */; };
-/* End PBXBuildFile section */
-
 /* Begin PBXFileReference section */
 		CBDFB8872F1683C600352B56 /* no laughing matter.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "no laughing matter.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -27,7 +23,6 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				CB2E3A942F4DDF3000FA6557 /* FirebaseAI in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -70,7 +65,6 @@
 			);
 			name = "no laughing matter";
 			packageProductDependencies = (
-				CB2E3A932F4DDF3000FA6557 /* FirebaseAI */,
 			);
 			productName = "no laughing matter";
 			productReference = CBDFB8872F1683C600352B56 /* no laughing matter.app */;
@@ -101,7 +95,6 @@
 			mainGroup = CBDFB87E2F1683C600352B56;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				CB2E3A922F4DDF3000FA6557 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = CBDFB8882F1683C600352B56 /* Products */;
@@ -276,7 +269,7 @@
 				ENABLE_RESOURCE_ACCESS_LOCATION = NO;
 				ENABLE_RESOURCE_ACCESS_PRINTING = NO;
 				ENABLE_RESOURCE_ACCESS_USB = NO;
-				ENABLE_USER_SELECTED_FILES = readonly;
+				ENABLE_USER_SELECTED_FILES = readwrite;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -318,7 +311,7 @@
 				ENABLE_RESOURCE_ACCESS_LOCATION = NO;
 				ENABLE_RESOURCE_ACCESS_PRINTING = NO;
 				ENABLE_RESOURCE_ACCESS_USB = NO;
-				ENABLE_USER_SELECTED_FILES = readonly;
+				ENABLE_USER_SELECTED_FILES = readwrite;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -360,25 +353,6 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
-
-/* Begin XCRemoteSwiftPackageReference section */
-		CB2E3A922F4DDF3000FA6557 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/firebase/firebase-ios-sdk";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 12.9.0;
-			};
-		};
-/* End XCRemoteSwiftPackageReference section */
-
-/* Begin XCSwiftPackageProductDependency section */
-		CB2E3A932F4DDF3000FA6557 /* FirebaseAI */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = CB2E3A922F4DDF3000FA6557 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
-			productName = FirebaseAI;
-		};
-/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = CBDFB87F2F1683C600352B56 /* Project object */;
 }

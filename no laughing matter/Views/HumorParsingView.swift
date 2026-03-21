@@ -6,14 +6,18 @@
 //
 
 import SwiftUI
+import SwiftData
 
 struct HumorParsingView: View {
+    @Environment(\.modelContext) private var modelContext
     @State private var xmlFiles: [URL] = []
     @State private var humorEvents: [HumorEvent] = []
     @State private var isParsing = false
     @State private var parseProgress: (current: Int, total: Int) = (0, 0)
+    @State private var currentFileName: String = ""
     @State private var errorMessage: String?
-    @State private var savedLocation: URL?
+    @State private var saveSuccess = false
+    @State private var parseTask: Task<Void, Never>?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -60,21 +64,12 @@ struct HumorParsingView: View {
             } else {
                 Label("\(xmlFiles.count) XML files available for parsing", systemImage: "doc.text")
 
-                Text("This will extract all humor events from the protocols, including:")
+                Text("This will extract all humor events from the protocols using RegEx.")
                     .font(.callout)
                     .padding(.top, 8)
 
-                VStack(alignment: .leading, spacing: 4) {
-                    Label("Heiterkeit (amusement)", systemImage: "face.smiling")
-                    Label("Lachen (laughing)", systemImage: "face.smiling.inverse")
-                }
-                .font(.callout)
-                .foregroundStyle(.secondary)
-
                 Button("Start Parsing") {
-                    Task {
-                        await parseAllProtocols()
-                    }
+                    parseAllProtocols()
                 }
                 .buttonStyle(.borderedProminent)
                 .padding(.top)
@@ -85,15 +80,42 @@ struct HumorParsingView: View {
 
     private var progressView: some View {
         VStack(alignment: .leading, spacing: 8) {
-            ProgressView(value: Double(parseProgress.current), total: Double(parseProgress.total))
+            ProgressView(value: Double(parseProgress.current), total: max(Double(parseProgress.total), 1))
 
-            Text("Parsing protocol \(parseProgress.current) of \(parseProgress.total)...")
-                .font(.callout)
-                .foregroundStyle(.secondary)
+            HStack {
+                Text("Parsing protocol \(parseProgress.current) of \(parseProgress.total)")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+
+                Spacer()
+
+                if parseProgress.total > 0 {
+                    let pct = Int(Double(parseProgress.current) / Double(parseProgress.total) * 100)
+                    Text("\(pct)%")
+                        .font(.callout.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            if !currentFileName.isEmpty {
+                Text(currentFileName)
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
 
             Text("\(humorEvents.count) humor events found so far")
                 .font(.caption)
                 .foregroundStyle(.tertiary)
+
+            Button("Cancel") {
+                parseTask?.cancel()
+                parseTask = nil
+                isParsing = false
+            }
+            .buttonStyle(.bordered)
+            .padding(.top, 4)
         }
     }
 
@@ -111,14 +133,15 @@ struct HumorParsingView: View {
                 .buttonStyle(.borderedProminent)
 
                 Button("Parse Again") {
+                    clearClassifications()
                     humorEvents = []
-                    savedLocation = nil
+                    saveSuccess = false
                 }
                 .buttonStyle(.bordered)
             }
 
-            if let savedLocation {
-                Text("Saved to: \(savedLocation.path)")
+            if saveSuccess {
+                Text("Saved to SwiftData")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -215,38 +238,72 @@ struct HumorParsingView: View {
 
     private func loadCachedEvents() {
         if humorEvents.isEmpty {
-            if let cached = try? HumorEventStorage.shared.loadEvents() {
-                humorEvents = cached
+            do {
+                let descriptor = FetchDescriptor<HumorEvent>()
+                let cached = try modelContext.fetch(descriptor)
+                if !cached.isEmpty {
+                    humorEvents = cached
+                }
+            } catch {
+                // No cached events yet
             }
         }
     }
 
-    private func parseAllProtocols() async {
+    /// Clears classifications from all stored HumorEvents
+    private func clearClassifications() {
+        do {
+            let descriptor = FetchDescriptor<HumorEvent>()
+            let events = try modelContext.fetch(descriptor)
+            for event in events {
+                event.classification = nil
+            }
+            try modelContext.save()
+        } catch {
+            errorMessage = "Failed to clear classifications: \(error.localizedDescription)"
+        }
+    }
+
+    private func parseAllProtocols() {
         isParsing = true
         errorMessage = nil
         humorEvents = []
         parseProgress = (0, xmlFiles.count)
+        currentFileName = ""
 
-        do {
-            let files = xmlFiles
-            let results = try await Task.detached {
-                try HumorEventParser.shared.parseProtocols(at: files) { current, total in
+        let files = xmlFiles
+        parseTask = Task.detached {
+            do {
+                try await HumorEventParser.shared.parseProtocolsAsync(at: files) { current, total, newEvents in
                     Task { @MainActor in
-                        self.parseProgress = (current, total)
+                        parseProgress = (current, total)
+                        currentFileName = files[current - 1].lastPathComponent
+                        humorEvents.append(contentsOf: newEvents)
                     }
                 }
-            }.value
-            humorEvents = results
-        } catch {
-            errorMessage = error.localizedDescription
-        }
+            } catch {
+                let msg = error.localizedDescription
+                await MainActor.run {
+                    errorMessage = msg
+                }
+            }
 
-        isParsing = false
+            await MainActor.run {
+                isParsing = false
+                parseTask = nil
+            }
+        }
     }
 
     private func saveResults() {
         do {
-            savedLocation = try HumorEventStorage.shared.saveEvents(humorEvents)
+            // Delete existing events before inserting new ones
+            try modelContext.delete(model: HumorEvent.self)
+            for event in humorEvents {
+                modelContext.insert(event)
+            }
+            try modelContext.save()
+            saveSuccess = true
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -311,59 +368,6 @@ struct HumorEventRow: View {
         case .heiterkeit: return .blue
         case .lachen: return .orange
         }
-    }
-}
-
-// MARK: - Storage
-
-final class HumorEventStorage {
-    static let shared = HumorEventStorage()
-
-    private init() {}
-
-    private func getStorageDirectory() throws -> URL {
-        let fileManager = FileManager.default
-        let appSupport = try fileManager.url(
-            for: .applicationSupportDirectory,
-            in: .userDomainMask,
-            appropriateFor: nil,
-            create: true
-        )
-
-        let storageDir = appSupport
-            .appendingPathComponent("NoLaughingMatter")
-            .appendingPathComponent("ParsedData")
-
-        if !fileManager.fileExists(atPath: storageDir.path) {
-            try fileManager.createDirectory(at: storageDir, withIntermediateDirectories: true)
-        }
-
-        return storageDir
-    }
-
-    func saveEvents(_ events: [HumorEvent]) throws -> URL {
-        let storageDir = try getStorageDirectory()
-        let fileURL = storageDir.appendingPathComponent("humor_events.json")
-
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-
-        let data = try encoder.encode(events)
-        try data.write(to: fileURL)
-
-        return fileURL
-    }
-
-    func loadEvents() throws -> [HumorEvent]? {
-        let storageDir = try getStorageDirectory()
-        let fileURL = storageDir.appendingPathComponent("humor_events.json")
-
-        guard FileManager.default.fileExists(atPath: fileURL.path) else {
-            return nil
-        }
-
-        let data = try Data(contentsOf: fileURL)
-        return try JSONDecoder().decode([HumorEvent].self, from: data)
     }
 }
 

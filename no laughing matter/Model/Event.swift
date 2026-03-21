@@ -6,36 +6,37 @@
 //
 
 import Foundation
+import SwiftData
 
 /// Represents a humor event extracted from a Bundestag protocol
-struct HumorEvent: Identifiable, Codable {
-    let id: UUID
-
+@Model
+final class HumorEvent {
     // MARK: - Session Metadata
-    let wahlperiode: Int           // Legislative period (e.g., 19, 20, 21)
-    let sitzungsnummer: Int        // Session number
-    let datum: String              // Date of session
+    var wahlperiode: Int           // Legislative period (e.g., 19, 20, 21)
+    var sitzungsnummer: Int        // Session number
+    var datum: String              // Date of session
 
     // MARK: - Speaker Information
-    let speakerId: String?         // Redner ID from XML
-    let speakerName: String        // Full name of speaker
-    let speakerParty: String?      // Party/Fraktion of speaker
-    let speakerRole: String?       // Role if any (e.g., "Bundesminister")
+    var speakerId: String?         // Redner ID from XML
+    var speakerName: String        // Full name of speaker
+    var speakerParty: String?      // Party/Fraktion of speaker
+    var speakerRole: String?       // Role if any (e.g., "Bundesminister")
+    var speakerGender: SpeakerDirectory.Gender? // Gender from MDB_STAMMDATEN
 
     // MARK: - Humor Details
-    let humorType: HumorType       // Type of humor marker
-    let rawComment: String         // Original <kommentar> content
-    let laughingParties: [String]  // Parties that laughed
-    let laughingIndividuals: [LaughingIndividual] // Specific individuals who laughed
+    var humorType: HumorType       // Type of humor marker
+    var rawComment: String         // Original <kommentar> content
+    var laughingParties: [String]  // Parties that laughed
+    var laughingIndividuals: [LaughingIndividual] // Specific individuals who laughed
 
     // MARK: - Context
-    let precedingText: String      // Text spoken before the humor event
-    let followingText: String?     // Text spoken after (if available)
-    let agendaItem: String?        // Tagesordnungspunkt if available
+    var precedingText: String      // Text spoken before the humor event
+    var followingText: String?     // Text spoken after (if available)
+    var agendaItem: String?        // Tagesordnungspunkt if available
 
     // MARK: - Source Location
-    let sourceFile: String         // XML filename
-    let pageNumber: String?        // Seitennummer if available
+    var sourceFile: String         // XML filename
+    var pageNumber: String?        // Seitennummer if available
 
     // MARK: - Classification (Phase 2)
     var classification: LLMClassification?
@@ -48,6 +49,7 @@ struct HumorEvent: Identifiable, Codable {
         speakerName: String,
         speakerParty: String? = nil,
         speakerRole: String? = nil,
+        speakerGender: SpeakerDirectory.Gender? = nil,
         humorType: HumorType,
         rawComment: String,
         laughingParties: [String] = [],
@@ -59,7 +61,6 @@ struct HumorEvent: Identifiable, Codable {
         pageNumber: String? = nil,
         classification: LLMClassification? = nil
     ) {
-        self.id = UUID()
         self.wahlperiode = wahlperiode
         self.sitzungsnummer = sitzungsnummer
         self.datum = datum
@@ -67,6 +68,7 @@ struct HumorEvent: Identifiable, Codable {
         self.speakerName = speakerName
         self.speakerParty = speakerParty
         self.speakerRole = speakerRole
+        self.speakerGender = speakerGender
         self.humorType = humorType
         self.rawComment = rawComment
         self.laughingParties = laughingParties
@@ -98,7 +100,3 @@ struct LaughingIndividual: Codable, Equatable {
     let name: String
     let party: String?
 }
-
-// MARK: - Legacy compatibility
-
-typealias Event = HumorEvent

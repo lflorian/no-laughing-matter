@@ -6,12 +6,18 @@
 //
 
 import SwiftUI
+import SwiftData
 
 @main
 struct no_laughing_matterApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
+        }
+        .modelContainer(for: [HumorEvent.self, ProtocolMetadata.self])
+
+        Settings {
+            SettingsView()
         }
     }
 }

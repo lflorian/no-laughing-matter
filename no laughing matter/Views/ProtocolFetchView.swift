@@ -6,12 +6,14 @@
 //
 
 import SwiftUI
+import SwiftData
 
 struct ProtocolFetchView: View {
+    @Environment(\.modelContext) private var modelContext
     @StateObject private var fetcher = ProtocolFetcher.shared
     @State private var protocols: [ProtocolMetadata] = []
     @State private var errorMessage: String?
-    @State private var savedLocation: URL?
+    @State private var saveSuccess = false
     @State private var xmlResult: ProtocolFetcher.XMLBatchResult?
     @State private var isDownloadingXML = false
 
@@ -64,8 +66,14 @@ struct ProtocolFetchView: View {
 
     private func loadCachedMetadata() {
         if protocols.isEmpty {
-            if let cached = try? fetcher.loadCachedMetadata() {
-                protocols = cached
+            do {
+                let descriptor = FetchDescriptor<ProtocolMetadata>()
+                let cached = try modelContext.fetch(descriptor)
+                if !cached.isEmpty {
+                    protocols = cached
+                }
+            } catch {
+                // No cached protocols yet
             }
         }
     }
@@ -206,16 +214,26 @@ struct ProtocolFetchView: View {
                 }
                 .buttonStyle(.bordered)
 
-                Button("Fetch Again") {
+                Button("Clear All & Fetch Again") {
+                    clearXMLFiles()
+                    clearDownstreamData()
                     protocols = []
-                    savedLocation = nil
+                    saveSuccess = false
+                    xmlResult = nil
+                }
+                .buttonStyle(.bordered)
+
+                Button("Fetch Again") {
+                    clearDownstreamData()
+                    protocols = []
+                    saveSuccess = false
                     xmlResult = nil
                 }
                 .buttonStyle(.bordered)
             }
 
-            if let savedLocation {
-                Text("Saved to: \(savedLocation.path)")
+            if saveSuccess {
+                Text("Saved to SwiftData")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -297,6 +315,29 @@ struct ProtocolFetchView: View {
         }
     }
 
+    /// Deletes downloaded XML protocol files from disk.
+    private func clearXMLFiles() {
+        do {
+            let xmlDir = try ProtocolFetcher.shared.getXMLDirectory()
+            let files = try FileManager.default.contentsOfDirectory(at: xmlDir, includingPropertiesForKeys: nil)
+            for file in files where file.pathExtension == "xml" {
+                try FileManager.default.removeItem(at: file)
+            }
+        } catch {
+            // Directory might not exist yet — that's fine
+        }
+    }
+
+    /// Clears downstream SwiftData records: parsed HumorEvents and their classifications.
+    private func clearDownstreamData() {
+        do {
+            try modelContext.delete(model: HumorEvent.self)
+            try modelContext.save()
+        } catch {
+            errorMessage = "Failed to clear downstream data: \(error.localizedDescription)"
+        }
+    }
+
     private func fetchProtocols() async {
         errorMessage = nil
         do {
@@ -314,7 +355,13 @@ struct ProtocolFetchView: View {
 
     private func saveMetadata() {
         do {
-            savedLocation = try fetcher.saveToCache(protocols)
+            // Delete existing metadata before inserting new
+            try modelContext.delete(model: ProtocolMetadata.self)
+            for proto in protocols {
+                modelContext.insert(proto)
+            }
+            try modelContext.save()
+            saveSuccess = true
         } catch {
             errorMessage = error.localizedDescription
         }

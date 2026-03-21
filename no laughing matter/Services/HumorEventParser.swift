@@ -12,6 +12,8 @@ final class HumorEventParser {
 
     static let shared = HumorEventParser()
 
+    private let speakerDirectory = SpeakerDirectory.shared
+
     private init() {}
 
     // MARK: - Main Parsing
@@ -33,21 +35,27 @@ final class HumorEventParser {
         )
     }
 
-    /// Parses multiple protocol files
-    func parseProtocols(at urls: [URL], progress: ((Int, Int) -> Void)? = nil) throws -> [HumorEvent] {
-        var allEvents: [HumorEvent] = []
-
+    /// Parses multiple protocol files asynchronously, yielding between files to keep the UI responsive.
+    /// Calls `onFileComplete` after each file with the current index, total count, and new events.
+    func parseProtocolsAsync(
+        at urls: [URL],
+        onFileComplete: @Sendable (Int, Int, [HumorEvent]) -> Void
+    ) async throws {
         for (index, url) in urls.enumerated() {
-            progress?(index + 1, urls.count)
+            try Task.checkCancellation()
+            let events: [HumorEvent]
             do {
-                let events = try parseProtocol(at: url)
-                allEvents.append(contentsOf: events)
+                events = try parseProtocol(at: url)
+            } catch is CancellationError {
+                throw CancellationError()
             } catch {
                 print("Warning: Failed to parse \(url.lastPathComponent): \(error)")
+                events = []
             }
+            onFileComplete(index + 1, urls.count, events)
+            // Yield to let the UI update between files
+            await Task.yield()
         }
-
-        return allEvents
     }
 
     // MARK: - Session Metadata Extraction
@@ -103,6 +111,12 @@ final class HumorEventParser {
             // Extract context (speaker and preceding text)
             let context = extractContext(from: xml, matchRange: match.range)
 
+            // Look up speaker gender from MDB directory
+            let speakerGender = speakerDirectory.gender(
+                forId: context.speakerId,
+                name: context.speakerName
+            )
+
             let event = HumorEvent(
                 wahlperiode: metadata.wahlperiode,
                 sitzungsnummer: metadata.sitzungsnummer,
@@ -111,6 +125,7 @@ final class HumorEventParser {
                 speakerName: context.speakerName,
                 speakerParty: context.speakerParty,
                 speakerRole: context.speakerRole,
+                speakerGender: speakerGender,
                 humorType: humorType,
                 rawComment: fullComment,
                 laughingParties: laughingParties,
@@ -155,18 +170,21 @@ final class HumorEventParser {
         "BÜNDNISSES 90/DIE GRÜNEN",
         "GRÜNEN",
         "BSW",
-        "fraktionslos"
+        "fraktionslos",
+        "Fraktionslos"
     ]
 
     /// Normalizes party names to consistent format
     private func normalizeParty(_ party: String) -> String {
         switch party {
         case "CDU/CSU":
-            return "CDU"
+            return "CDU/CSU"
         case "LINKEN", "DIE LINKE":
             return "DIE LINKE"
         case "GRÜNEN", "BÜNDNISSES 90/DIE GRÜNEN", "BÜNDNIS 90/DIE GRÜNEN":
             return "BÜNDNIS 90/DIE GRÜNEN"
+        case "fraktionslos", "Fraktionslos":
+            return "Fraktionslos"
         default:
             return party
         }

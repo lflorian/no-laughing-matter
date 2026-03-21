@@ -49,9 +49,8 @@ The program will use a three-phase processing pipeline.
 #### Process:
 - For each HumorEvent, construct a prompt with: Surrounding text content, speaker information, political context (session topic)
 - Use FoundationModels API to classify
-- Possible classification types: Approval, Mockery, Irony, Self-deprecation
+- Classification uses Avner Ziv's (1984) five-functions model of humor (aggressive, social, defensive, intellectual, sexual), plus unclear (insufficient context). Each event receives a primary intention and an optional secondary intention.
 - The LLM should output confidence rating about its classification, results with a low confidence should be discarded
-- Additional context/classifications will possibly be added later (will study some literature first)
 
 
 ### Phase 3: Quantitative and Qualitative Analysis
