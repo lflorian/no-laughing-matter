@@ -29,6 +29,7 @@ final class SpeakerDirectory {
         let vorname: String
         let nachname: String
         let gender: Gender
+        let birthDate: Date?
         let wahlperioden: Set<Int>
     }
 
@@ -37,6 +38,9 @@ final class SpeakerDirectory {
 
     /// "vorname nachname" (lowercased) -> SpeakerRecord (fallback for name-based lookup)
     private var speakersByName: [String: SpeakerRecord] = [:]
+
+    /// Wahlperiode number -> earliest MDBWP_VON date seen (used for age baseline calculation)
+    private var wahlperiodeStartDates: [Int: Date] = [:]
 
     private(set) var isLoaded = false
 
@@ -67,6 +71,15 @@ final class SpeakerDirectory {
             speakersById[record.id] = record
             let nameKey = "\(record.vorname) \(record.nachname)".lowercased()
             speakersByName[nameKey] = record
+        }
+
+        // Collect earliest WP start dates
+        for (wp, date) in delegate.wahlperiodeStartDates {
+            if let existing = wahlperiodeStartDates[wp] {
+                if date < existing { wahlperiodeStartDates[wp] = date }
+            } else {
+                wahlperiodeStartDates[wp] = date
+            }
         }
 
         isLoaded = true
@@ -116,6 +129,62 @@ final class SpeakerDirectory {
         return (male: male, female: female)
     }
 
+    /// Age group labels used for bucketing (shared with VisualizerView)
+    static let ageGroupOrder = ["Under 30", "30–39", "40–49", "50–59", "60–69", "70+"]
+
+    static func ageGroupLabel(for age: Int) -> String {
+        switch age {
+        case ..<30: return "Under 30"
+        case 30..<40: return "30–39"
+        case 40..<50: return "40–49"
+        case 50..<60: return "50–59"
+        case 60..<70: return "60–69"
+        default: return "70+"
+        }
+    }
+
+    /// Returns MdB count per age group for a given Wahlperiode (age calculated at WP start date)
+    func ageComposition(forWahlperiode wp: Int) -> [String: Int] {
+        loadIfNeeded()
+        guard let wpStartDate = wahlperiodeStartDates[wp] else { return [:] }
+        let calendar = Calendar.current
+        var counts: [String: Int] = [:]
+        for record in speakersById.values {
+            guard record.wahlperioden.contains(wp),
+                  let birth = record.birthDate else { continue }
+            let ageComponents = calendar.dateComponents([.year], from: birth, to: wpStartDate)
+            guard let age = ageComponents.year, age > 0 && age < 120 else { continue }
+            let group = Self.ageGroupLabel(for: age)
+            counts[group, default: 0] += 1
+        }
+        return counts
+    }
+
+    /// Look up birth date by speaker ID (primary) then name (fallback)
+    func birthDate(forId id: String?, name: String?) -> Date? {
+        loadIfNeeded()
+        if let id = id, let d = speakersById[id]?.birthDate {
+            return d
+        }
+        if let name = name {
+            let cleaned = name
+                .replacingOccurrences(of: #"(Dr\.|Prof\.|h\.c\.)"#, with: "", options: .regularExpression)
+                .trimmingCharacters(in: .whitespaces)
+                .lowercased()
+            if let d = speakersByName[cleaned]?.birthDate {
+                return d
+            }
+        }
+        return nil
+    }
+
+    /// Calculate age in years at a given date
+    func age(forId id: String?, name: String?, onDate date: Date) -> Int? {
+        guard let birth = birthDate(forId: id, name: name) else { return nil }
+        let components = Calendar.current.dateComponents([.year], from: birth, to: date)
+        return components.year
+    }
+
     /// Returns all Wahlperioden that have at least one MdB record
     var availableWahlperioden: [Int] {
         loadIfNeeded()
@@ -128,6 +197,7 @@ final class SpeakerDirectory {
 
 private class StammdatenParserDelegate: NSObject, XMLParserDelegate {
     var records: [SpeakerDirectory.SpeakerRecord] = []
+    var wahlperiodeStartDates: [Int: Date] = [:]
 
     // Current parsing state
     private var currentElement = ""
@@ -142,9 +212,18 @@ private class StammdatenParserDelegate: NSObject, XMLParserDelegate {
     private var currentVorname = ""
     private var currentNachname = ""
     private var currentGeschlecht = ""
+    private var currentGeburtsdatum = ""
     private var currentWP = ""
+    private var currentMDBWPVon = ""
     private var currentWahlperioden: Set<Int> = []
     private var nameAlreadyCaptured = false
+
+    private static let birthDateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "dd.MM.yyyy"
+        f.locale = Locale(identifier: "de_DE")
+        return f
+    }()
 
     func parser(_ parser: XMLParser, didStartElement elementName: String,
                 namespaceURI: String?, qualifiedName: String?,
@@ -158,6 +237,7 @@ private class StammdatenParserDelegate: NSObject, XMLParserDelegate {
             currentVorname = ""
             currentNachname = ""
             currentGeschlecht = ""
+            currentGeburtsdatum = ""
             currentWahlperioden = []
             nameAlreadyCaptured = false
         case "NAMEN":
@@ -174,6 +254,7 @@ private class StammdatenParserDelegate: NSObject, XMLParserDelegate {
             if insideWahlperioden {
                 insideWahlperiode = true
                 currentWP = ""
+                currentMDBWPVon = ""
             }
         default:
             break
@@ -203,9 +284,17 @@ private class StammdatenParserDelegate: NSObject, XMLParserDelegate {
             if insideBiografie {
                 currentGeschlecht += trimmed
             }
+        case "GEBURTSDATUM":
+            if insideBiografie {
+                currentGeburtsdatum += trimmed
+            }
         case "WP":
             if insideWahlperiode {
                 currentWP += trimmed
+            }
+        case "MDBWP_VON":
+            if insideWahlperiode {
+                currentMDBWPVon += trimmed
             }
         default:
             break
@@ -217,11 +306,13 @@ private class StammdatenParserDelegate: NSObject, XMLParserDelegate {
         switch elementName {
         case "MDB":
             if !currentId.isEmpty, let gender = SpeakerDirectory.Gender(rawValue: currentGeschlecht) {
+                let birthDate = Self.birthDateFormatter.date(from: currentGeburtsdatum)
                 let record = SpeakerDirectory.SpeakerRecord(
                     id: currentId,
                     vorname: currentVorname,
                     nachname: currentNachname,
                     gender: gender,
+                    birthDate: birthDate,
                     wahlperioden: currentWahlperioden
                 )
                 records.append(record)
@@ -239,6 +330,13 @@ private class StammdatenParserDelegate: NSObject, XMLParserDelegate {
         case "WAHLPERIODE":
             if insideWahlperiode, let wp = Int(currentWP) {
                 currentWahlperioden.insert(wp)
+                if let date = Self.birthDateFormatter.date(from: currentMDBWPVon) {
+                    if let existing = wahlperiodeStartDates[wp] {
+                        if date < existing { wahlperiodeStartDates[wp] = date }
+                    } else {
+                        wahlperiodeStartDates[wp] = date
+                    }
+                }
             }
             insideWahlperiode = false
         case "WAHLPERIODEN":

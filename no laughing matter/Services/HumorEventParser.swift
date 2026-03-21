@@ -117,6 +117,22 @@ final class HumorEventParser {
                 name: context.speakerName
             )
 
+            // Calculate speaker age at time of session
+            let speakerAge: Int? = {
+                let formatter = DateFormatter()
+                formatter.locale = Locale(identifier: "de_DE")
+                let sessionDate: Date?
+                if metadata.datum.contains(".") {
+                    formatter.dateFormat = "dd.MM.yyyy"
+                    sessionDate = formatter.date(from: metadata.datum)
+                } else {
+                    formatter.dateFormat = "yyyy-MM-dd"
+                    sessionDate = formatter.date(from: metadata.datum)
+                }
+                guard let date = sessionDate else { return nil }
+                return speakerDirectory.age(forId: context.speakerId, name: context.speakerName, onDate: date)
+            }()
+
             let event = HumorEvent(
                 wahlperiode: metadata.wahlperiode,
                 sitzungsnummer: metadata.sitzungsnummer,
@@ -126,6 +142,7 @@ final class HumorEventParser {
                 speakerParty: context.speakerParty,
                 speakerRole: context.speakerRole,
                 speakerGender: speakerGender,
+                speakerAge: speakerAge,
                 humorType: humorType,
                 rawComment: fullComment,
                 laughingParties: laughingParties,
@@ -222,7 +239,7 @@ final class HumorEventParser {
         var individuals: [LaughingIndividual] = []
 
         // Pattern 1: "Lachen des Abg. Name [Party]"
-        let abgPattern = #"(?:Lachen|Heiterkeit)\s+des\s+Abg\.\s+([^[]+)\s*\[([^\]]+)\]"#
+        let abgPattern = #"(?:Lachen|Heiterkeit)\s+des\s+Abg\.\s+([^\[]+)\s*\[([^\]]+)\]"#
 
         if let regex = try? NSRegularExpression(pattern: abgPattern, options: []) {
             let range = NSRange(content.startIndex..., in: content)
@@ -238,7 +255,7 @@ final class HumorEventParser {
         }
 
         // Pattern 2: "Lachen der Abg. Name [Party]" (female form)
-        let abgFemPattern = #"(?:Lachen|Heiterkeit)\s+der\s+Abg\.\s+([^[]+)\s*\[([^\]]+)\]"#
+        let abgFemPattern = #"(?:Lachen|Heiterkeit)\s+der\s+Abg\.\s+([^\[]+)\s*\[([^\]]+)\]"#
 
         if let regex = try? NSRegularExpression(pattern: abgFemPattern, options: []) {
             let range = NSRange(content.startIndex..., in: content)

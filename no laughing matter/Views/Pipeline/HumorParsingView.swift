@@ -272,7 +272,7 @@ struct HumorParsingView: View {
         currentFileName = ""
 
         let files = xmlFiles
-        parseTask = Task.detached {
+        parseTask = Task {
             do {
                 try await HumorEventParser.shared.parseProtocolsAsync(at: files) { current, total, newEvents in
                     Task { @MainActor in

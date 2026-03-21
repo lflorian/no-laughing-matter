@@ -1,0 +1,161 @@
+//
+//  HumorTypesTab.swift
+//  no laughing matter
+//
+//  Created by Claude on 21.03.26.
+//
+
+import SwiftUI
+import Charts
+
+struct HumorTypesTab: View {
+    let vm: VisualizationViewModel
+
+    private let afdEntry: Date = {
+        var comps = DateComponents()
+        comps.year = 2017; comps.month = 10; comps.day = 1
+        return Calendar.current.date(from: comps)!
+    }()
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 24) {
+            // Per-Wahlperiode pie charts
+            ChartSection(title: "Heiterkeit vs. Lachen by Wahlperiode", subtitle: "Proportion of humor types per legislative period") {
+                let byWP = vm.humorTypeByWahlperiode
+                if byWP.isEmpty {
+                    emptyLabel("No humor type data.")
+                } else {
+                    let wahlperioden = Array(Set(byWP.map(\.wahlperiode))).sorted()
+                    let columns = Array(repeating: GridItem(.flexible(), spacing: 24), count: min(wahlperioden.count, 6))
+                    LazyVGrid(columns: columns, alignment: .center, spacing: 16) {
+                        ForEach(wahlperioden, id: \.self) { wp in
+                            let wpData = byWP.filter { $0.wahlperiode == wp }
+                            let total = wpData.reduce(0) { $0 + $1.count }
+                            VStack(spacing: 6) {
+                                Chart(wpData, id: \.type) { item in
+                                    SectorMark(
+                                        angle: .value("Count", item.count),
+                                        innerRadius: .ratio(0.5),
+                                        angularInset: 2
+                                    )
+                                    .foregroundStyle(humorTypeColor(item.type))
+                                    .cornerRadius(3)
+                                }
+                                .frame(width: 100, height: 100)
+
+                                Text("WP \(wp)")
+                                    .font(.caption.bold())
+                                Text("\(total) events")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                    .padding(.vertical, 4)
+
+                    // Legend
+                    HStack(spacing: 16) {
+                        ForEach(HumorType.allCases, id: \.self) { type in
+                            HStack(spacing: 4) {
+                                Circle()
+                                    .fill(humorTypeColor(type))
+                                    .frame(width: 10, height: 10)
+                                Text(type.description)
+                                    .font(.caption)
+                            }
+                        }
+                    }
+                    .padding(.top, 4)
+                }
+            }
+
+            // Temporal line chart by humor type
+            ChartSection(title: "Humor Type Over Time", subtitle: "Monthly count by type · vertical line marks AfD entry (Oct 2017)") {
+                let data = vm.humorTypeTemporalData
+                if data.isEmpty {
+                    emptyLabel("No temporal humor type data.")
+                } else {
+                    let showMarker: Bool = {
+                        let months = data.map(\.month)
+                        guard let first = months.min(), let last = months.max() else { return false }
+                        return first <= afdEntry && last >= afdEntry
+                    }()
+
+                    let spanMonths: Int = {
+                        let months = data.map(\.month)
+                        guard let first = months.min(), let last = months.max() else { return 1 }
+                        let comps = Calendar.current.dateComponents([.month], from: first, to: last)
+                        return max(1, (comps.month ?? 0) + 1)
+                    }()
+
+                    Chart {
+                        ForEach(HumorType.allCases, id: \.self) { type in
+                            let typeData = data.filter { $0.type == type && $0.count > 0 }
+                            ForEach(typeData, id: \.month) { item in
+                                LineMark(
+                                    x: .value("Month", item.month, unit: .month),
+                                    y: .value("Events", item.count)
+                                )
+                                .interpolationMethod(.linear)
+                                .foregroundStyle(humorTypeColor(type))
+                                .lineStyle(StrokeStyle(lineWidth: 2))
+                            }
+                        }
+
+                        if showMarker {
+                            RuleMark(x: .value("AfD entry", afdEntry, unit: .month))
+                                .lineStyle(StrokeStyle(lineWidth: 1.5, dash: [5, 3]))
+                                .foregroundStyle(.orange)
+                                .annotation(position: .top, alignment: .leading, spacing: 4) {
+                                    Text("AfD entry\nOct 2017")
+                                        .font(.caption2)
+                                        .foregroundStyle(.orange)
+                                        .multilineTextAlignment(.leading)
+                                }
+                        }
+                    }
+                    .chartForegroundStyleScale([
+                        HumorType.heiterkeit.description: humorTypeColor(.heiterkeit),
+                        HumorType.lachen.description: humorTypeColor(.lachen)
+                    ])
+                    .chartXAxis {
+                        if spanMonths <= 18 {
+                            AxisMarks(values: .stride(by: .month)) { _ in
+                                AxisGridLine()
+                                AxisTick()
+                                AxisValueLabel(format: .dateTime.month(.abbreviated).year())
+                            }
+                        } else if spanMonths <= 48 {
+                            AxisMarks(values: .stride(by: .month, count: 3)) { _ in
+                                AxisGridLine()
+                                AxisTick()
+                                AxisValueLabel(format: .dateTime.month(.abbreviated).year(.twoDigits))
+                            }
+                        } else {
+                            AxisMarks(values: .stride(by: .year)) { _ in
+                                AxisGridLine()
+                                AxisTick()
+                                AxisValueLabel(format: .dateTime.year())
+                            }
+                        }
+                    }
+                    .frame(height: 260)
+
+                    // Legend
+                    HStack(spacing: 16) {
+                        ForEach(HumorType.allCases, id: \.self) { type in
+                            HStack(spacing: 4) {
+                                RoundedRectangle(cornerRadius: 2)
+                                    .fill(humorTypeColor(type))
+                                    .frame(width: 16, height: 3)
+                                Text(type.description)
+                                    .font(.caption)
+                            }
+                        }
+                    }
+                    .padding(.top, 4)
+                }
+            }
+        }
+    }
+}

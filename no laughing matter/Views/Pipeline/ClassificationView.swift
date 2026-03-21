@@ -197,7 +197,7 @@ struct ClassificationView: View {
             }
 
             if let avg = manager.averageSecondsPerEvent {
-                Text(String(format: "%.1fs/event", avg))
+                Text("\(avg, format: .number.precision(.fractionLength(1)))s/event")
                     .font(.caption.monospacedDigit())
                     .foregroundStyle(.tertiary)
             }
@@ -271,15 +271,14 @@ struct ClassificationView: View {
 
     private var filteredClassifiedEvents: [HumorEvent] {
         guard !searchText.isEmpty else { return allClassifiedEvents }
-        let query = searchText.lowercased()
         return allClassifiedEvents.filter { event in
-            event.speakerName.lowercased().contains(query)
-            || (event.speakerParty?.lowercased().contains(query) ?? false)
-            || event.rawComment.lowercased().contains(query)
-            || event.precedingText.lowercased().contains(query)
-            || (event.classification?.primaryIntention.rawValue.lowercased().contains(query) ?? false)
-            || (event.classification?.secondaryIntention?.rawValue.lowercased().contains(query) ?? false)
-            || event.laughingParties.joined(separator: " ").lowercased().contains(query)
+            event.speakerName.localizedStandardContains(searchText)
+            || (event.speakerParty?.localizedStandardContains(searchText) ?? false)
+            || event.rawComment.localizedStandardContains(searchText)
+            || event.precedingText.localizedStandardContains(searchText)
+            || (event.classification?.primaryIntention.rawValue.localizedStandardContains(searchText) ?? false)
+            || (event.classification?.secondaryIntention?.rawValue.localizedStandardContains(searchText) ?? false)
+            || event.laughingParties.joined(separator: " ").localizedStandardContains(searchText)
         }
     }
 
@@ -601,7 +600,7 @@ struct ClassifiedEventRow: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Divider()
 
-                    Text(classification.reasoning)
+                    Text(classification.reasoning ?? "Reasoning unavailable")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .italic()
@@ -648,26 +647,6 @@ struct ClassifiedEventRow: View {
         case .sexual:        return .pink
         case .unclear:       return .secondary
         }
-    }
-}
-
-// MARK: - CSV Document for FileExporter
-
-struct CSVDocument: FileDocument {
-    static var readableContentTypes: [UTType] { [.commaSeparatedText] }
-
-    let csv: String
-
-    init(csv: String) {
-        self.csv = csv
-    }
-
-    init(configuration: ReadConfiguration) throws {
-        csv = ""
-    }
-
-    func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper {
-        FileWrapper(regularFileWithContents: Data(csv.utf8))
     }
 }
 

@@ -43,44 +43,6 @@ struct ContentView: View {
     }
 }
 
-/// Test view for LLM classification (moved from original ContentView)
-struct AnalysisTestView: View {
-    @State private var input = ""
-    @State private var result: LLMClassification?
-    @State private var errorMessage: String?
-
-    var body: some View {
-        VStack(spacing: 12) {
-            TextField("Enter humor event description", text: $input)
-                .textFieldStyle(.roundedBorder)
-
-            Button("Analyze") {
-                Task {
-                    errorMessage = nil
-                    do {
-                        result = try await IntelligenceManager.shared.analyzeEvent(input)
-                    } catch {
-                        result = nil
-                        errorMessage = error.localizedDescription
-                    }
-                }
-            }
-
-            if let result {
-                Text("Intention: \(result.primaryIntention)")
-                Text("Confidence: \(result.confidenceRating)")
-                    .font(.headline)
-            }
-
-            if let errorMessage {
-                Text(errorMessage).foregroundStyle(.red)
-            }
-        }
-        .padding()
-        .navigationTitle("Phase 3: LLM Classifier")
-    }
-}
-
 #Preview {
     ContentView()
 }

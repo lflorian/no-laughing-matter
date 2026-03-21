@@ -112,8 +112,7 @@ actor ClaudeAPIClient {
         for attempt in 0...maxRetries {
             if attempt > 0 {
                 // Exponential backoff: 1s, 2s, 4s
-                let delay = UInt64(pow(2.0, Double(attempt - 1))) * 1_000_000_000
-                try await Task.sleep(nanoseconds: delay)
+                try await Task.sleep(for: .seconds(pow(2.0, Double(attempt - 1))))
             }
 
             do {
@@ -174,7 +173,7 @@ actor ClaudeAPIClient {
             guard let oldest = requestTimestamps.first else { return }
             let waitTime = oldest.timeIntervalSince(cutoff)
             if waitTime > 0 {
-                try await Task.sleep(nanoseconds: UInt64(waitTime * 1_000_000_000))
+                try await Task.sleep(for: .seconds(waitTime))
             }
             // Clean up again
             let newCutoff = Date().addingTimeInterval(-60)

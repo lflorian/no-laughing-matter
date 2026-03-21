@@ -6,11 +6,10 @@
 //
 
 import Foundation
-import Combine
 import SwiftData
 
 /// Service for fetching Bundestag plenary protocols from the DIP API
-final class ProtocolFetcher: ObservableObject {
+@MainActor @Observable final class ProtocolFetcher {
 
     static let shared = ProtocolFetcher()
 
@@ -18,8 +17,8 @@ final class ProtocolFetcher: ObservableObject {
     private let apiKey = "OSOegLs.PR2lwJ1dwCeje9vTj7FPOt3hvpYKtwKkhw"
     private let session = URLSession.shared
 
-    @Published var isFetching = false
-    @Published var progress: FetchProgress = FetchProgress()
+    var isFetching = false
+    var progress: FetchProgress = FetchProgress()
 
     private init() {}
 
@@ -52,32 +51,24 @@ final class ProtocolFetcher: ObservableObject {
 
     /// Fetches all protocols for the given legislative periods, optionally filtered by date range
     func fetchProtocols(forPeriods periods: [Int], dateRange: DateRange? = nil) async throws -> [ProtocolMetadata] {
-        await MainActor.run {
-            isFetching = true
-            progress = FetchProgress()
-        }
+        isFetching = true
+        progress = FetchProgress()
 
         defer {
-            Task { @MainActor in
-                isFetching = false
-            }
+            isFetching = false
         }
 
         var allProtocols: [ProtocolMetadata] = []
 
         for period in periods {
-            await MainActor.run {
-                progress.currentPeriod = period
-                progress.message = "Fetching period \(period)..."
-            }
+            progress.currentPeriod = period
+            progress.message = "Fetching period \(period)..."
 
             let protocols = try await fetchProtocolsForPeriod(period, dateRange: dateRange)
             allProtocols.append(contentsOf: protocols)
         }
 
-        await MainActor.run {
-            progress.message = "Done! Fetched \(allProtocols.count) protocols."
-        }
+        progress.message = "Done! Fetched \(allProtocols.count) protocols."
 
         return allProtocols
     }
@@ -90,13 +81,11 @@ final class ProtocolFetcher: ObservableObject {
         repeat {
             let response = try await fetchPage(period: period, cursor: cursor, dateRange: dateRange)
 
-            await MainActor.run {
-                if progress.totalFound == 0 {
-                    progress.totalFound = response.numFound
-                }
-                progress.fetched += response.documents.count
-                progress.message = "Period \(period): \(protocols.count + response.documents.count) protocols..."
+            if progress.totalFound == 0 {
+                progress.totalFound = response.numFound
             }
+            progress.fetched += response.documents.count
+            progress.message = "Period \(period): \(protocols.count + response.documents.count) protocols..."
 
             // Convert API documents to ProtocolMetadata model objects
             let newProtocols = response.documents.map { doc in
@@ -127,7 +116,9 @@ final class ProtocolFetcher: ObservableObject {
 
     /// Fetches a single page of results
     private func fetchPage(period: Int, cursor: String?, dateRange: DateRange? = nil) async throws -> APIResponse {
-        var components = URLComponents(string: "\(baseURL)/plenarprotokoll")!
+        guard var components = URLComponents(string: "\(baseURL)/plenarprotokoll") else {
+            throw FetchError.invalidURL
+        }
         var queryItems = [
             URLQueryItem(name: "apikey", value: apiKey),
             URLQueryItem(name: "f.wahlperiode", value: String(period)),
@@ -185,7 +176,7 @@ final class ProtocolFetcher: ObservableObject {
     /// Returns the directory for cached XML files
     func getXMLDirectory() throws -> URL {
         let cacheDir = try getCacheDirectory()
-        let xmlDir = cacheDir.appendingPathComponent("xml")
+        let xmlDir = cacheDir.appending(path: "xml")
 
         if !FileManager.default.fileExists(atPath: xmlDir.path) {
             try FileManager.default.createDirectory(at: xmlDir, withIntermediateDirectories: true)
@@ -198,7 +189,7 @@ final class ProtocolFetcher: ObservableObject {
     func xmlFilePath(for protocol: ProtocolMetadata) throws -> URL {
         let xmlDir = try getXMLDirectory()
         let filename = "\(`protocol`.wahlperiode)_\(`protocol`.dokumentnummer.replacingOccurrences(of: "/", with: "_")).xml"
-        return xmlDir.appendingPathComponent(filename)
+        return xmlDir.appending(path: filename)
     }
 
     /// Checks if XML is already cached locally
@@ -228,50 +219,42 @@ final class ProtocolFetcher: ObservableObject {
 
     /// Downloads all XML files for the given protocols
     func downloadAllXMLs(for protocols: [ProtocolMetadata]) async -> XMLBatchResult {
-        await MainActor.run {
-            isFetching = true
-            progress.xmlTotal = protocols.count
-            progress.xmlDownloaded = 0
-            progress.xmlSkipped = 0
-            progress.xmlFailed = 0
-            progress.message = "Starting XML downloads..."
-        }
+        isFetching = true
+        progress.xmlTotal = protocols.count
+        progress.xmlDownloaded = 0
+        progress.xmlSkipped = 0
+        progress.xmlFailed = 0
+        progress.message = "Starting XML downloads..."
 
         defer {
-            Task { @MainActor in
-                isFetching = false
-            }
+            isFetching = false
         }
 
         var results = XMLBatchResult()
 
         for (index, proto) in protocols.enumerated() {
-            await MainActor.run {
-                progress.message = "Downloading \(index + 1)/\(protocols.count): \(proto.dokumentnummer)..."
-            }
+            progress.message = "Downloading \(index + 1)/\(protocols.count): \(proto.dokumentnummer)..."
 
             do {
                 let result = try await downloadAndCacheXML(for: proto)
                 switch result {
                 case .downloaded:
                     results.downloaded += 1
-                    await MainActor.run { progress.xmlDownloaded += 1 }
+                    progress.xmlDownloaded += 1
                 case .skipped:
                     results.skipped += 1
-                    await MainActor.run { progress.xmlSkipped += 1 }
+                    progress.xmlSkipped += 1
                 case .noXML:
                     results.noXML += 1
-                    await MainActor.run { progress.xmlFailed += 1 }
+                    progress.xmlFailed += 1
                 }
             } catch {
                 results.failed.append((proto.dokumentnummer, error.localizedDescription))
-                await MainActor.run { progress.xmlFailed += 1 }
+                progress.xmlFailed += 1
             }
         }
 
-        await MainActor.run {
-            progress.message = "Done! Downloaded: \(results.downloaded), Skipped: \(results.skipped), Failed: \(results.failed.count)"
-        }
+        progress.message = "Done! Downloaded: \(results.downloaded), Skipped: \(results.skipped), Failed: \(results.failed.count)"
 
         return results
     }
@@ -300,8 +283,8 @@ final class ProtocolFetcher: ObservableObject {
         )
 
         let cacheDir = appSupport
-            .appendingPathComponent("NoLaughingMatter")
-            .appendingPathComponent("Protocols")
+            .appending(path: "NoLaughingMatter")
+            .appending(path: "Protocols")
 
         if !fileManager.fileExists(atPath: cacheDir.path) {
             try fileManager.createDirectory(at: cacheDir, withIntermediateDirectories: true)

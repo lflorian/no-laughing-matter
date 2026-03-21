@@ -38,7 +38,7 @@ private actor ConcurrencySemaphore {
     }
 }
 
-@Observable
+@MainActor @Observable
 final class ClassificationManager {
 
     var isClassifying = false

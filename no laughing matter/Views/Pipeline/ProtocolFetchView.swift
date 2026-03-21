@@ -10,7 +10,7 @@ import SwiftData
 
 struct ProtocolFetchView: View {
     @Environment(\.modelContext) private var modelContext
-    @StateObject private var fetcher = ProtocolFetcher.shared
+    @State private var fetcher = ProtocolFetcher.shared
     @State private var protocols: [ProtocolMetadata] = []
     @State private var errorMessage: String?
     @State private var saveSuccess = false
@@ -59,7 +59,7 @@ struct ProtocolFetchView: View {
         }
         .padding()
         .frame(minWidth: 500, minHeight: 400)
-        .onAppear {
+        .task {
             loadCachedMetadata()
         }
     }

@@ -22,6 +22,7 @@ final class HumorEvent {
     var speakerParty: String?      // Party/Fraktion of speaker
     var speakerRole: String?       // Role if any (e.g., "Bundesminister")
     var speakerGender: SpeakerDirectory.Gender? // Gender from MDB_STAMMDATEN
+    var speakerAge: Int?                        // Age at time of session from MDB_STAMMDATEN
 
     // MARK: - Humor Details
     var humorType: HumorType       // Type of humor marker
@@ -50,6 +51,7 @@ final class HumorEvent {
         speakerParty: String? = nil,
         speakerRole: String? = nil,
         speakerGender: SpeakerDirectory.Gender? = nil,
+        speakerAge: Int? = nil,
         humorType: HumorType,
         rawComment: String,
         laughingParties: [String] = [],
@@ -69,6 +71,7 @@ final class HumorEvent {
         self.speakerParty = speakerParty
         self.speakerRole = speakerRole
         self.speakerGender = speakerGender
+        self.speakerAge = speakerAge
         self.humorType = humorType
         self.rawComment = rawComment
         self.laughingParties = laughingParties
@@ -90,8 +93,8 @@ enum HumorType: String, Codable, CaseIterable {
 
     var description: String {
         switch self {
-        case .heiterkeit: return "Heiterkeit (Amusement)"
-        case .lachen: return "Lachen (Laughing)"
+        case .heiterkeit: "Heiterkeit (Amusement)"
+        case .lachen: "Lachen (Laughing)"
         }
     }
 }
