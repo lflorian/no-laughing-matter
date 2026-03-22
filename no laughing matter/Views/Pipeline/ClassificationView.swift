@@ -15,8 +15,7 @@ struct ClassificationView: View {
     @Query private var parsedEvents: [HumorEvent]
     @State private var errorMessage: String?
     @State private var saveSuccess = false
-    @State private var classificationTask: Task<Void, Never>?
-    @State private var showingExporter = false
+    @State private var csvDocument: CSVDocument?
     @State private var showingStatistics = false
     @State private var searchText = ""
 
@@ -26,11 +25,11 @@ struct ClassificationView: View {
                 .font(.title2)
                 .fontWeight(.semibold)
 
-            Text("Classify humor intentions using Claude API (Haiku 3.5).")
+            Text("Classify humor intentions using Claude Batch API")
                 .foregroundStyle(.secondary)
 
             if !manager.hasAPIKey {
-                Label("No API key configured. Go to Settings (⌘,) to add your Claude API key.", systemImage: "exclamationmark.triangle.fill")
+                Label("No API key configured. Go to Settings (\u{2318},) to add your Claude API key.", systemImage: "exclamationmark.triangle.fill")
                     .foregroundStyle(.orange)
             }
 
@@ -38,11 +37,11 @@ struct ClassificationView: View {
 
             startView
 
-            if manager.isClassifying {
-                progressView
+            if manager.hasPendingBatch || manager.isSubmitting {
+                batchControlView
             }
 
-            if !manager.classifiedEvents.isEmpty {
+            if !manager.classifiedEvents.isEmpty && !manager.isDownloading {
                 freshResultsBanner
             }
 
@@ -64,8 +63,11 @@ struct ClassificationView: View {
         .frame(minWidth: 600, minHeight: 500)
         .navigationTitle("LLM Classifier")
         .fileExporter(
-            isPresented: $showingExporter,
-            document: CSVDocument(csv: buildCSVExport()),
+            isPresented: Binding(
+                get: { csvDocument != nil },
+                set: { if !$0 { csvDocument = nil } }
+            ),
+            document: csvDocument ?? CSVDocument(csv: ""),
             contentType: .commaSeparatedText,
             defaultFilename: "classifications_\(formattedTimestamp).csv"
         ) { result in
@@ -127,35 +129,14 @@ struct ClassificationView: View {
                 }
                 .padding(.top, 8)
 
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack {
-                        Text("Parallel requests:")
-                            .font(.callout)
-                        Text("\(manager.maxConcurrency)")
-                            .font(.callout.monospacedDigit())
-                            .foregroundStyle(.secondary)
-                    }
-                    Slider(
-                        value: Binding(
-                            get: { Double(manager.maxConcurrency) },
-                            set: { manager.maxConcurrency = Int($0) }
-                        ),
-                        in: 1...16,
-                        step: 1
-                    )
-                    .frame(width: 200)
-                    Text("Higher values are faster but use more API rate limit budget.")
-                        .font(.caption)
-                        .foregroundStyle(.tertiary)
-                }
-                .padding(.top, 8)
-
                 HStack(spacing: 12) {
-                    Button("Classify \(unclassifiedEvents.count) Events") {
-                        startClassification()
+                    Button("Submit Batch (\(unclassifiedEvents.count) Events)") {
+                        Task {
+                            await manager.submitBatch(unclassifiedEvents)
+                        }
                     }
                     .buttonStyle(.borderedProminent)
-                    .disabled(!manager.hasAPIKey || unclassifiedEvents.isEmpty)
+                    .disabled(!manager.hasAPIKey || unclassifiedEvents.isEmpty || manager.isSubmitting || manager.hasPendingBatch)
 
                     if classifiedCount > 0 {
                         Button("Clear All Classifications") {
@@ -170,72 +151,128 @@ struct ClassificationView: View {
         }
     }
 
-    // MARK: - Progress View
+    // MARK: - Batch Control View
 
-    private var progressView: some View {
+    private var batchControlView: some View {
         VStack(alignment: .leading, spacing: 8) {
-            ProgressView(value: Double(manager.completed), total: Double(manager.total))
+            Divider()
 
-            HStack {
-                Text("Classifying event \(manager.completed) of \(manager.total)...")
-                    .font(.callout)
+            // Batch ID
+            if let batchId = manager.batchId {
+                HStack {
+                    Label("Batch", systemImage: "tray.full")
+                        .font(.headline)
+                    Text(batchId)
+                        .font(.caption.monospaced())
+                        .foregroundStyle(.secondary)
+                        .textSelection(.enabled)
+                }
+            }
+
+            // Status display
+            if let status = manager.batchStatus {
+                let counts = status.requestCounts
+                HStack(spacing: 16) {
+                    Label("\(counts.succeeded) succeeded", systemImage: "checkmark.circle")
+                        .foregroundStyle(.green)
+                    if counts.errored > 0 {
+                        Label("\(counts.errored) errored", systemImage: "xmark.circle")
+                            .foregroundStyle(.red)
+                    }
+                    if counts.expired > 0 {
+                        Label("\(counts.expired) expired", systemImage: "clock.badge.exclamationmark")
+                            .foregroundStyle(.orange)
+                    }
+                    if counts.processing > 0 {
+                        Label("\(counts.processing) processing", systemImage: "clock")
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .font(.callout)
+
+                if status.processingStatus == "ended" {
+                    ProgressView(value: 1.0)
+                        .tint(.green)
+                } else {
+                    let done = Double(counts.succeeded + counts.errored + counts.canceled + counts.expired)
+                    let all = done + Double(counts.processing)
+                    ProgressView(value: all > 0 ? done / all : 0)
+                }
+            }
+
+            if manager.isSubmitting {
+                HStack {
+                    ProgressView()
+                        .controlSize(.small)
+                    Text("Submitting batch...")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            if let msg = manager.statusMessage {
+                Text(msg)
+                    .font(.caption)
                     .foregroundStyle(.secondary)
+            }
+
+            // Action buttons
+            HStack(spacing: 12) {
+                Button {
+                    Task { await manager.checkStatus() }
+                } label: {
+                    Label("Check Status", systemImage: "arrow.clockwise")
+                }
+                .buttonStyle(.bordered)
+                .disabled(manager.batchId == nil || manager.isSubmitting)
+
+                if manager.isReadyForDownload {
+                    Button {
+                        Task { await manager.downloadResults(for: Array(unclassifiedEvents)) }
+                    } label: {
+                        Label("Download Results", systemImage: "arrow.down.circle.fill")
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(manager.isDownloading)
+                }
+
+                if manager.batchStatus?.processingStatus != "ended" && !manager.isSubmitting {
+                    Button {
+                        Task { await manager.cancelBatch() }
+                    } label: {
+                        Label("Cancel Batch", systemImage: "xmark.circle")
+                    }
+                    .buttonStyle(.bordered)
+                    .foregroundStyle(.red)
+                }
 
                 Spacer()
 
-                if let eta = manager.formattedETA {
-                    Text(eta)
-                        .font(.callout.monospacedDigit())
-                        .foregroundStyle(.secondary)
-                }
-
-                if !manager.errors.isEmpty {
-                    Text("\(manager.errors.count) errors")
-                        .font(.caption)
-                        .foregroundStyle(.red)
-                }
-            }
-
-            if let avg = manager.averageSecondsPerEvent {
-                Text("\(avg, format: .number.precision(.fractionLength(1)))s/event")
-                    .font(.caption.monospacedDigit())
-                    .foregroundStyle(.tertiary)
-            }
-
-            HStack(spacing: 12) {
-                if manager.isPaused {
-                    Button("Resume") {
-                        manager.resume()
-                    }
-                    .buttonStyle(.borderedProminent)
-                } else {
-                    Button("Pause") {
-                        manager.pause()
-                    }
-                    .buttonStyle(.bordered)
-                }
-
-                Button("Cancel") {
-                    manager.cancel()
+                Button("Dismiss") {
+                    manager.clearBatch()
                 }
                 .buttonStyle(.bordered)
-                .foregroundStyle(.red)
+                .foregroundStyle(.secondary)
             }
             .padding(.top, 4)
+
+            Text("Batches typically complete within 1 hour. You can close the app and check back later.")
+                .font(.caption)
+                .foregroundStyle(.tertiary)
         }
     }
 
-    // MARK: - Fresh Results Banner (after a classification run)
+    // MARK: - Fresh Results Banner (after downloading)
 
     private var freshResultsBanner: some View {
         VStack(alignment: .leading, spacing: 8) {
             Divider()
             HStack {
-                Label("\(manager.classifiedEvents.count) newly classified", systemImage: "checkmark.circle.fill")
+                Label("\(manager.succeeded) classified", systemImage: "checkmark.circle.fill")
                     .foregroundStyle(.green)
 
-                if !manager.errors.isEmpty {
-                    Text("(\(manager.errors.count) errors)")
+                if manager.errored > 0 {
+                    Text("(\(manager.errored) errors)")
                         .font(.callout)
                         .foregroundStyle(.red)
                 }
@@ -305,7 +342,7 @@ struct ClassificationView: View {
                 }
 
                 Button("Export CSV") {
-                    showingExporter = true
+                    csvDocument = CSVDocument(csv: buildCSVExport())
                 }
                 .buttonStyle(.bordered)
             }
@@ -449,14 +486,6 @@ struct ClassificationView: View {
 
     // MARK: - Actions
 
-    private func startClassification() {
-        errorMessage = nil
-        saveSuccess = false
-        classificationTask = Task {
-            await manager.classifyEvents(unclassifiedEvents)
-        }
-    }
-
     private func clearAllClassifications() {
         for event in parsedEvents {
             event.classification = nil
@@ -506,7 +535,6 @@ struct ClassificationView: View {
 
     private func saveResults() {
         do {
-            // Classifications are already set on the managed objects; just save
             try modelContext.save()
             saveSuccess = true
         } catch {
@@ -525,7 +553,6 @@ struct ClassifiedEventRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
-                // Humor type badge
                 Text(event.humorType.rawValue)
                     .font(.caption)
                     .padding(.horizontal, 6)
@@ -534,7 +561,6 @@ struct ClassifiedEventRow: View {
                     .foregroundStyle(humorTypeColor)
                     .clipShape(Capsule())
 
-                // Intention badge
                 if let classification = event.classification {
                     Text(classification.primaryIntention.rawValue)
                         .font(.caption)
@@ -557,7 +583,6 @@ struct ClassifiedEventRow: View {
                             )
                     }
 
-                    // Confidence indicator
                     confidenceIndicator(classification.confidenceRating)
                 } else {
                     Text("unclassified")

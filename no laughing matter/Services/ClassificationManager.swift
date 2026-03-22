@@ -8,54 +8,41 @@
 import Foundation
 import Observation
 
-/// Actor-based semaphore for limiting concurrency
-private actor ConcurrencySemaphore {
-    private let limit: Int
-    private var current = 0
-    private var waiters: [CheckedContinuation<Void, Never>] = []
-
-    init(limit: Int) {
-        self.limit = limit
-    }
-
-    func wait() async {
-        if current < limit {
-            current += 1
-            return
-        }
-        await withCheckedContinuation { continuation in
-            waiters.append(continuation)
-        }
-    }
-
-    func signal() {
-        if let next = waiters.first {
-            waiters.removeFirst()
-            next.resume()
-        } else {
-            current -= 1
-        }
-    }
-}
-
 @MainActor @Observable
 final class ClassificationManager {
 
-    var isClassifying = false
-    var isPaused = false
+    // MARK: - State
+
+    var isSubmitting = false
+    var isDownloading = false
     var completed = 0
     var total = 0
+    var succeeded = 0
+    var errored = 0
     var errors: [(index: Int, message: String)] = []
     var classifiedEvents: [HumorEvent] = []
     var confidenceThreshold = 4
-    var maxConcurrency = 16
 
-    // ETA tracking
-    private(set) var startTime: Date?
-    private(set) var averageSecondsPerEvent: Double?
+    // Batch tracking
+    var batchId: String? {
+        didSet { persistBatchId() }
+    }
+    var batchStatus: BatchStatus?
+    var statusMessage: String?
 
-    private var isCancelled = false
-    private var pauseContinuation: CheckedContinuation<Void, Never>?
+    var hasAPIKey: Bool {
+        APIKeyManager.load() != nil
+    }
+
+    /// Whether a batch is active (submitted but not yet downloaded)
+    var hasPendingBatch: Bool {
+        batchId != nil
+    }
+
+    /// Whether the batch has finished and results are ready
+    var isReadyForDownload: Bool {
+        batchStatus?.processingStatus == "ended" && batchStatus?.resultsUrl != nil
+    }
 
     var highConfidenceEvents: [HumorEvent] {
         classifiedEvents.filter { ($0.classification?.confidenceRating ?? 0) >= confidenceThreshold }
@@ -65,122 +52,183 @@ final class ClassificationManager {
         classifiedEvents.filter { ($0.classification?.confidenceRating ?? 0) < confidenceThreshold }
     }
 
-    var estimatedSecondsRemaining: Double? {
-        guard let avg = averageSecondsPerEvent, completed > 0 else { return nil }
-        return avg * Double(total - completed)
-    }
+    // MARK: - Init
 
-    var formattedETA: String? {
-        guard let seconds = estimatedSecondsRemaining else { return nil }
-        if seconds < 60 { return "<1 min remaining" }
-        let minutes = Int(seconds) / 60
-        if minutes >= 60 {
-            return "\(minutes / 60)h \(minutes % 60)m remaining"
+    init() {
+        // Restore batch ID from previous session
+        if let saved = UserDefaults.standard.string(forKey: "pendingBatchId") {
+            batchId = saved
         }
-        let secs = Int(seconds) % 60
-        return "\(minutes)m \(secs)s remaining"
     }
 
-    var hasAPIKey: Bool {
-        APIKeyManager.load() != nil
-    }
+    // MARK: - Step 1: Submit Batch
 
-    func classifyEvents(_ events: [HumorEvent]) async {
-        isClassifying = true
-        isPaused = false
-        isCancelled = false
-        completed = 0
+    func submitBatch(_ events: [HumorEvent]) async {
+        isSubmitting = true
         total = events.count
+        succeeded = 0
+        errored = 0
         errors = []
         classifiedEvents = []
-        startTime = Date()
-        averageSecondsPerEvent = nil
+        statusMessage = "Building batch request..."
 
-        let semaphore = ConcurrencySemaphore(limit: maxConcurrency)
         let manager = IntelligenceManager.shared
+        let client = manager.client
 
-        await withTaskGroup(of: (Int, HumorEvent, LLMClassification?, String?).self) { group in
-            for (index, event) in events.enumerated() {
-                // Wait for a semaphore slot — this is where backpressure happens
-                await semaphore.wait()
-
-                if isCancelled {
-                    await semaphore.signal()
-                    break
-                }
-
-                // Check pause between dispatching tasks
-                if isPaused {
-                    await withCheckedContinuation { continuation in
-                        pauseContinuation = continuation
-                    }
-                    pauseContinuation = nil
-                    if isCancelled {
-                        await semaphore.signal()
-                        break
-                    }
-                }
-
-                group.addTask {
-                    defer { Task { await semaphore.signal() } }
-
-                    // Check cancellation before making the API call
-                    guard !Task.isCancelled else {
-                        return (index, event, nil, "Cancelled")
-                    }
-
-                    do {
-                        let classification = try await manager.analyzeEvent(event)
-                        return (index, event, classification, nil)
-                    } catch {
-                        print("❌ Classification error [\(index)] \(event.speakerName): \(error)")
-                        return (index, event, nil, "\(event.speakerName): \(error.localizedDescription)")
-                    }
-                }
-            }
-
-            // Process results as they complete
-            for await (index, event, classification, errorMessage) in group {
-                if isCancelled { break }
-
-                if let classification {
-                    event.classification = classification
-                }
-                classifiedEvents.append(event)
-
-                if let errorMessage, errorMessage != "Cancelled" {
-                    errors.append((index: index, message: errorMessage))
-                }
-
-                completed += 1
-                updateAverageTime()
-            }
-
-            if isCancelled {
-                group.cancelAll()
-            }
+        // Build batch requests
+        var batchRequests: [[String: Any]] = []
+        for (index, event) in events.enumerated() {
+            let prompt = manager.buildPrompt(for: event)
+            let req = await client.buildBatchRequest(
+                customId: "event-\(index)",
+                system: manager.instructions,
+                user: prompt
+            )
+            batchRequests.append(req)
         }
 
-        isClassifying = false
+        statusMessage = "Submitting \(events.count) events as batch..."
+
+        do {
+            let status = try await client.createBatch(requests: batchRequests)
+            batchId = status.id
+            batchStatus = status
+            statusMessage = "Batch submitted: \(status.id). Use 'Check Status' to monitor progress."
+        } catch {
+            statusMessage = "Failed to create batch: \(error.localizedDescription)"
+        }
+
+        isSubmitting = false
     }
 
-    func pause() {
-        isPaused = true
+    // MARK: - Step 2: Check Status (manual)
+
+    func checkStatus() async {
+        guard let id = batchId else {
+            statusMessage = "No batch ID."
+            return
+        }
+
+        statusMessage = "Checking batch status..."
+
+        do {
+            let status = try await IntelligenceManager.shared.client.retrieveBatch(id: id)
+            batchStatus = status
+            let counts = status.requestCounts
+            completed = counts.succeeded + counts.errored + counts.canceled + counts.expired
+
+            if status.processingStatus == "ended" {
+                statusMessage = "Batch complete — \(counts.succeeded) succeeded, \(counts.errored) errored, \(counts.expired) expired. Ready to download."
+            } else {
+                statusMessage = "Processing: \(counts.succeeded) done, \(counts.processing) in progress, \(counts.errored) errored."
+            }
+        } catch {
+            statusMessage = "Failed to check status: \(error.localizedDescription)"
+        }
     }
 
-    func resume() {
-        isPaused = false
-        pauseContinuation?.resume()
+    // MARK: - Step 3: Download Results
+
+    func downloadResults(for events: [HumorEvent]) async {
+        guard let resultsUrl = batchStatus?.resultsUrl else {
+            statusMessage = "No results URL available."
+            return
+        }
+
+        isDownloading = true
+        statusMessage = "Downloading results..."
+        classifiedEvents = []
+        errors = []
+        succeeded = 0
+        errored = 0
+
+        do {
+            let results = try await IntelligenceManager.shared.client.fetchBatchResults(resultsURL: resultsUrl)
+
+            for result in results {
+                // Parse index from custom_id "event-42"
+                guard let indexStr = result.customId.split(separator: "-").last,
+                      let index = Int(indexStr),
+                      index < events.count else {
+                    print("⚠️ Unknown custom_id in batch result: \(result.customId)")
+                    errors.append((index: -1, message: "Unknown custom_id: \(result.customId)"))
+                    errored += 1
+                    continue
+                }
+
+                let event = events[index]
+
+                if result.result.type == "succeeded", let classification = result.classification() {
+                    event.classification = classification
+                    succeeded += 1
+                } else {
+                    let reason: String
+                    switch result.result.type {
+                    case "succeeded": reason = "Failed to parse classification from response"
+                    case "errored": reason = "API error"
+                    case "expired": reason = "Request expired (24h limit)"
+                    case "canceled": reason = "Request was cancelled"
+                    default: reason = result.result.type
+                    }
+                    print("⚠️ Batch result [\(index)] \(event.speakerName): \(reason)")
+                    errors.append((index: index, message: "\(event.speakerName): \(reason)"))
+                    errored += 1
+                }
+
+                classifiedEvents.append(event)
+            }
+
+            completed = results.count
+            total = events.count
+            statusMessage = "Downloaded — \(succeeded) classified, \(errored) errors."
+
+            // Clear the pending batch since we've consumed the results
+            batchId = nil
+            batchStatus = nil
+        } catch {
+            statusMessage = "Failed to download results: \(error.localizedDescription)"
+        }
+
+        isDownloading = false
     }
 
-    func cancel() {
-        isCancelled = true
-        isPaused = false
-        pauseContinuation?.resume()
+    // MARK: - Cancel
+
+    func cancelBatch() async {
+        guard let id = batchId else { return }
+
+        statusMessage = "Cancelling batch..."
+        do {
+            try await IntelligenceManager.shared.client.cancelBatch(id: id)
+            statusMessage = "Cancel requested. Already-processed requests will still have results."
+            // Don't clear batchId yet — user may still want to download partial results
+            await checkStatus()
+        } catch {
+            statusMessage = "Failed to cancel: \(error.localizedDescription)"
+        }
     }
 
-    private func updateAverageTime() {
-        guard let start = startTime, completed > 0 else { return }
-        averageSecondsPerEvent = Date().timeIntervalSince(start) / Double(completed)
+    // MARK: - Clear
+
+    func clearBatch() {
+        batchId = nil
+        batchStatus = nil
+        statusMessage = nil
+        completed = 0
+        total = 0
+        succeeded = 0
+        errored = 0
+        errors = []
+        classifiedEvents = []
+    }
+
+    // MARK: - Persistence
+
+    private func persistBatchId() {
+        if let batchId {
+            UserDefaults.standard.set(batchId, forKey: "pendingBatchId")
+        } else {
+            UserDefaults.standard.removeObject(forKey: "pendingBatchId")
+        }
     }
 }

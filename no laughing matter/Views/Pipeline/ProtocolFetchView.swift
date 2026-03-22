@@ -18,7 +18,7 @@ struct ProtocolFetchView: View {
     @State private var isDownloadingXML = false
 
     // Period selection
-    private static let availablePeriods = Array(14...21)
+    private static let availablePeriods = Array(18...21)
     @State private var selectedPeriods: Set<Int> = [19, 20, 21]
 
     // Date range filtering

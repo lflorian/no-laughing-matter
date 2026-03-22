@@ -13,16 +13,12 @@ enum PoliticalRole: String, CaseIterable {
     case other = "Other"
 }
 
-/// Static mapping of coalition compositions for Bundestag legislative periods (WP 14–21).
+/// Static mapping of coalition compositions for Bundestag legislative periods (WP 18–21).
 /// Party names use the normalized form from `normalizeParty()`.
 struct CoalitionData {
 
     /// Governing parties per Wahlperiode (all others are opposition).
     static let governingParties: [Int: [String]] = [
-        14: ["SPD", "BÜNDNIS 90/DIE GRÜNEN"],
-        15: ["SPD", "BÜNDNIS 90/DIE GRÜNEN"],
-        16: ["CDU/CSU", "SPD"],
-        17: ["CDU/CSU", "FDP"],
         18: ["CDU/CSU", "SPD"],
         19: ["CDU/CSU", "SPD"],
         20: ["SPD", "BÜNDNIS 90/DIE GRÜNEN", "FDP"],
@@ -43,16 +39,11 @@ struct CoalitionData {
     }
 
     /// Seat counts per party per Wahlperiode (at start of legislative period).
-    /// Sources: bundestag.de Sitzverteilung archives.
     static let seatCounts: [Int: [String: Int]] = [
-        14: ["SPD": 298, "CDU/CSU": 245, "BÜNDNIS 90/DIE GRÜNEN": 47, "FDP": 43, "PDS": 36],
-        15: ["SPD": 251, "CDU/CSU": 248, "BÜNDNIS 90/DIE GRÜNEN": 55, "FDP": 47, "PDS": 2],
-        16: ["CDU/CSU": 226, "SPD": 222, "FDP": 61, "DIE LINKE": 54, "BÜNDNIS 90/DIE GRÜNEN": 51],
-        17: ["CDU/CSU": 239, "SPD": 146, "FDP": 93, "DIE LINKE": 76, "BÜNDNIS 90/DIE GRÜNEN": 68],
         18: ["CDU/CSU": 311, "SPD": 193, "DIE LINKE": 64, "BÜNDNIS 90/DIE GRÜNEN": 63],
         19: ["CDU/CSU": 246, "SPD": 153, "AfD": 94, "FDP": 80, "DIE LINKE": 69, "BÜNDNIS 90/DIE GRÜNEN": 67],
-        20: ["SPD": 206, "CDU/CSU": 197, "BÜNDNIS 90/DIE GRÜNEN": 118, "FDP": 92, "AfD": 83, "DIE LINKE": 39, "BSW": 10],
-        21: ["CDU/CSU": 208, "AfD": 152, "SPD": 120, "BÜNDNIS 90/DIE GRÜNEN": 85, "BSW": 40, "DIE LINKE": 28, "FDP": 0],
+        20: ["SPD": 207, "CDU/CSU": 196, "BÜNDNIS 90/DIE GRÜNEN": 117, "FDP": 90, "AfD": 76, "DIE LINKE": 27, "BSW": 10, "SSW": 1, "Fraktionslos": 9], // Sitzverteilung zum Ende der Legislatur
+        21: ["CDU/CSU": 208, "AfD": 150, "SPD": 120, "BÜNDNIS 90/DIE GRÜNEN": 85, "DIE LINKE": 64, "Fraktionslos": 3],
     ]
 
     /// Returns the average number of seats for a party across the given Wahlperioden.
