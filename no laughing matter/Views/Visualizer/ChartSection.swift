@@ -47,6 +47,8 @@ struct ChartSection<Content: View>: View {
             content
         }
         .padding()
+        .frame(width: 800)
+        .fixedSize(horizontal: false, vertical: true)
         .background(Color.white)
         .environment(\.colorScheme, .light)
 

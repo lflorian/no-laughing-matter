@@ -60,10 +60,10 @@ struct GenderTab: View {
                 .padding(.vertical, 48)
             } else {
                 // 1. Per-Wahlperiode baseline vs observed comparison
-                ChartSection(title: "Female Share: Parliament vs. Humor Events", subtitle: "Baseline = % female MdBs (Stammdaten) · Observed = % humor events triggered by women") {
+                ChartSection(title: "Frauenanteil: Parlament vs. Humor-Marker", subtitle: "Baseline: % weibliche MdBs (Stammdaten) | Beobachtet: % Humorereignisse ausgelöst von Frauen") {
                     let comparison = vm.genderBaselineComparison
                     if comparison.isEmpty {
-                        emptyLabel("No per-Wahlperiode gender comparison data available.")
+                        emptyLabel("Keine Geschlechtervergleichsdaten pro Wahlperiode verfügbar.")
                     } else {
                         let genderColumns = Array(repeating: GridItem(.flexible(), spacing: 24), count: min(comparison.count, 6))
                         LazyVGrid(columns: genderColumns, alignment: .center, spacing: 16) {
@@ -99,7 +99,7 @@ struct GenderTab: View {
                                     VStack(spacing: 2) {
                                         Text("Baseline: \(item.baselineFemalePercent, format: .number.precision(.fractionLength(1)))%")
                                             .foregroundStyle(.secondary)
-                                        Text("Observed: \(item.observedFemalePercent, format: .number.precision(.fractionLength(1)))%")
+                                        Text("Beobachtet: \(item.observedFemalePercent, format: .number.precision(.fractionLength(1)))%")
                                             .foregroundStyle(genderColor(.female))
                                         Text("\(delta >= 0 ? "+" : "")\(delta, format: .number.precision(.fractionLength(1)))pp")
                                             .foregroundStyle(delta >= 0 ? .green : .red)
@@ -107,7 +107,7 @@ struct GenderTab: View {
                                     }
                                     .font(.caption2)
 
-                                    Text("\(item.totalEvents) events")
+                                    Text("\(item.totalEvents) Events")
                                         .font(.caption2)
                                         .foregroundStyle(.tertiary)
                                 }
@@ -119,15 +119,15 @@ struct GenderTab: View {
                         HStack(spacing: 16) {
                             HStack(spacing: 4) {
                                 RoundedRectangle(cornerRadius: 2).fill(Color.gray.opacity(0.5)).frame(width: 16, height: 8)
-                                Text("Baseline (% female MdBs)").font(.caption)
+                                Text("Baseline (% weibliche MdBs)").font(.caption)
                             }
                             HStack(spacing: 4) {
                                 RoundedRectangle(cornerRadius: 2).fill(genderColor(.female)).frame(width: 16, height: 8)
-                                Text("Observed (% female humor events)").font(.caption)
+                                Text("Beobachtet (% weibliche Humorereignisse)").font(.caption)
                             }
                             HStack(spacing: 4) {
                                 RoundedRectangle(cornerRadius: 2).fill(genderColor(.male).opacity(0.3)).frame(width: 16, height: 8)
-                                Text("Male share").font(.caption)
+                                Text("Männeranteil").font(.caption)
                             }
                         }
                         .padding(.top, 4)

@@ -15,26 +15,26 @@ struct WhoTriggersTab: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 24) {
             HStack {
-                Toggle("Normalize by seats", isOn: $showNormalized)
+                Toggle("Nach Sitzen normalisieren", isOn: $showNormalized)
                     .toggleStyle(.switch)
                     .controlSize(.small)
                 Spacer()
             }
 
             ChartSection(
-                title: "Top Triggering Fraktionen",
+                title: "Auslösende Fraktionen",
                 subtitle: showNormalized
-                    ? "Trigger events per seat (normalized by average faction size)"
-                    : "Which party's speakers cause the most laughter"
+                    ? "Humor-Events pro Sitz (normalisiert nach durchschnittlicher Fraktionsgröße)"
+                    : "Fraktionszugehörigkeit der Sprecher, die am meisten Humor-Events bewirken"
             ) {
                 if showNormalized {
-                    let data = Array(vm.speakerFraktionCountsNormalized.prefix(12))
+                    let data = Array(vm.speakerFraktionCountsNormalized.prefix(8))
                     if data.isEmpty {
-                        emptyLabel("No speaker party data found or seat data unavailable.")
+                        emptyLabel("Keine Fraktionsdaten gefunden oder Sitzdaten nicht verfügbar.")
                     } else {
                         Chart(data, id: \.party) { item in
                             BarMark(
-                                x: .value("Per Seat", item.rate),
+                                x: .value("Pro Sitz", item.rate),
                                 y: .value("Fraktion", item.party)
                             )
                             .foregroundStyle(partyColor(item.party))
@@ -48,9 +48,9 @@ struct WhoTriggersTab: View {
                         .frame(height: CGFloat(data.count) * 34 + 20)
                     }
                 } else {
-                    let data = Array(vm.speakerFraktionCounts.prefix(12))
+                    let data = Array(vm.speakerFraktionCounts.prefix(8))
                     if data.isEmpty {
-                        emptyLabel("No speaker party data found.")
+                        emptyLabel("Keine Fraktionsdaten gefunden.")
                     } else {
                         Chart(data, id: \.party) { item in
                             BarMark(
@@ -70,15 +70,15 @@ struct WhoTriggersTab: View {
                 }
             }
 
-            ChartSection(title: "Top Triggering Individuals", subtitle: "Top 20 speakers who cause the most humor events") {
+            ChartSection(title: "Auslösende Einzelpersonen", subtitle: "MdB nach Frequenz der verursachten Humor-Marker") {
                 let data = Array(vm.speakerIndividualCounts.prefix(20))
                 if data.isEmpty {
-                    emptyLabel("No speaker data found.")
+                    emptyLabel("Keine Rednerdaten gefunden.")
                 } else {
                     Chart(data, id: \.name) { item in
                         BarMark(
                             x: .value("Events", item.count),
-                            y: .value("Speaker", item.name)
+                            y: .value("Redner:in", item.name)
                         )
                         .foregroundStyle(item.party.map { partyColor($0) } ?? Color.gray)
                         .annotation(position: .trailing) {

@@ -208,6 +208,18 @@ final class ClassificationManager {
         }
     }
 
+    // MARK: - Lookup Batch by ID
+
+    func lookupBatch(id: String) async {
+        let trimmed = id.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            statusMessage = "Please enter a batch ID."
+            return
+        }
+        batchId = trimmed
+        await checkStatus()
+    }
+
     // MARK: - Clear
 
     func clearBatch() {

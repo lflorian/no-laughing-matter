@@ -18,6 +18,7 @@ struct ClassificationView: View {
     @State private var csvDocument: CSVDocument?
     @State private var showingStatistics = false
     @State private var searchText = ""
+    @State private var lookupBatchId = ""
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -36,6 +37,10 @@ struct ClassificationView: View {
             Divider()
 
             startView
+
+            if !manager.hasPendingBatch && !manager.isSubmitting {
+                batchLookupView
+            }
 
             if manager.hasPendingBatch || manager.isSubmitting {
                 batchControlView
@@ -147,6 +152,32 @@ struct ClassificationView: View {
                     }
                 }
                 .padding(.top)
+            }
+        }
+    }
+
+    // MARK: - Batch Lookup View
+
+    private var batchLookupView: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Divider()
+            Text("Retrieve Existing Batch")
+                .font(.headline)
+
+            Text("Enter a batch ID to check status and download results from a previous run.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            HStack {
+                TextField("msgbatch_...", text: $lookupBatchId)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(maxWidth: 400)
+
+                Button("Retrieve") {
+                    Task { await manager.lookupBatch(id: lookupBatchId) }
+                }
+                .buttonStyle(.bordered)
+                .disabled(lookupBatchId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !manager.hasAPIKey)
             }
         }
     }

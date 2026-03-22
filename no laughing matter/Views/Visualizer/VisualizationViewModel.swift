@@ -127,13 +127,19 @@ final class VisualizationViewModel {
         return result
     }
 
+    private static let knownParties: Set<String> = [
+        "CDU/CSU", "SPD", "BÜNDNIS 90/DIE GRÜNEN", "FDP", "AfD", "Die Linke", "BSW", "SSW", "Fraktionslos"
+    ]
+
     var matrixParties: [String] {
         var totals: [String: Int] = [:]
         for entry in crossPartyMatrix {
             totals[entry.speaker, default: 0] += entry.count
             totals[entry.laugher, default: 0] += entry.count
         }
-        return totals.sorted { $0.value > $1.value }
+        return totals
+            .filter { Self.knownParties.contains($0.key) }
+            .sorted { $0.value > $1.value }
             .prefix(10)
             .map(\.key)
             .sorted()
@@ -160,6 +166,29 @@ final class VisualizationViewModel {
             for type in HumorType.allCases {
                 if let count = types[type], count > 0 {
                     result.append((wahlperiode: wp, type: type, count: count))
+                }
+            }
+        }
+        return result
+    }
+
+    var humorTypeByParty: [(party: String, type: HumorType, count: Int)] {
+        var counts: [String: [HumorType: Int]] = [:]
+        for event in events {
+            for party in event.laughingParties {
+                let p = normalizeParty(party)
+                guard !p.isEmpty else { continue }
+                counts[p, default: [:]][event.humorType, default: 0] += 1
+            }
+        }
+        let topParties = counts.map { (party: $0.key, total: $0.value.values.reduce(0, +)) }
+            .sorted { $0.total > $1.total }
+            .prefix(8).map(\.party)
+        var result: [(party: String, type: HumorType, count: Int)] = []
+        for party in topParties {
+            for type in HumorType.allCases {
+                if let count = counts[party]?[type], count > 0 {
+                    result.append((party: party, type: type, count: count))
                 }
             }
         }
@@ -227,11 +256,14 @@ final class VisualizationViewModel {
 
         var result: [(party: String, intention: HumorIntention, count: Int)] = []
         for party in topParties {
-            for (intention, count) in matrix[party, default: [:]] {
-                result.append((party: party, intention: intention, count: count))
+            for intention in HumorIntention.allCases {
+                let count = matrix[party, default: [:]][intention, default: 0]
+                if count > 0 {
+                    result.append((party: party, intention: intention, count: count))
+                }
             }
         }
-        return result.sorted { $0.party < $1.party }
+        return result
     }
 
     var intentionByWahlperiode: [(wahlperiode: Int, intention: HumorIntention, count: Int)] {

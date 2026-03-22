@@ -14,14 +14,14 @@ struct CrossPartyTab: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             ChartSection(
-                title: "Cross-Party Laughter Matrix",
-                subtitle: "Row = speaker's Fraktion  ·  Column = laughing Fraktion  ·  Cell = event count"
+                title: "Fraktionsübergreifende Matrix",
+                subtitle: "Zeile: Auslösende Fraktion (Redner) | Spalte: Reagierende Fraktion"
             ) {
                 let matrix = vm.crossPartyMatrix
                 let parties = vm.matrixParties
 
                 if matrix.isEmpty {
-                    emptyLabel("No cross-party data. Speaker party info may be missing from the protocols.")
+                    emptyLabel("Keine fraktionsübergreifenden Daten. Fraktionsangaben fehlen möglicherweise in den Protokollen.")
                 } else {
                     let maxCount = matrix.map(\.count).max() ?? 1
                     let lookup = Dictionary(
@@ -72,10 +72,6 @@ struct CrossPartyTab: View {
                     .padding(.top, 4)
                 }
             }
-
-            Text("Darker cells = more events. Diagonal = same party laughing at their own speaker.")
-                .font(.caption)
-                .foregroundStyle(.tertiary)
         }
     }
 }

@@ -40,7 +40,7 @@ private struct AgeCoverageBanner: View {
             HStack(spacing: 8) {
                 Image(systemName: "calendar")
                     .foregroundStyle(known < total ? .orange : .secondary)
-                Text("Based on \(known) of \(total) events with known speaker age")
+                Text("Basierend auf \(known) von \(total) Events mit bekanntem Alter")
                     .font(.callout)
                     .foregroundStyle(known < total ? .orange : .secondary)
             }
@@ -62,9 +62,9 @@ private struct AgeEmptyState: View {
             Image(systemName: "calendar")
                 .font(.system(size: 36))
                 .foregroundStyle(.secondary)
-            Text("No age data")
+            Text("Keine Altersdaten")
                 .font(.headline)
-            Text("Speaker age information is not yet available. Ensure the MDB_STAMMDATEN speaker directory is loaded and protocols are re-parsed.")
+            Text("Altersinformationen der Redner sind noch nicht verfügbar. Stellen Sie sicher, dass das MDB_STAMMDATEN-Verzeichnis geladen und die Protokolle erneut geparst wurden.")
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
         }
@@ -79,10 +79,10 @@ private struct AgeBaselineSection: View {
     let vm: VisualizationViewModel
 
     var body: some View {
-        ChartSection(title: "Age Distribution: Parliament vs. Humor Events", subtitle: "Baseline = % of MdBs in age group (Stammdaten) · Observed = % of humor events by age group") {
+        ChartSection(title: "Altersverteilung: Parlament vs. Humor-Marker", subtitle: "Baseline: % der MdBs in Altersgruppe (Stammdaten) | Beobachtet: % der Humorereignisse nach Altersgruppe") {
             let comparison = vm.ageBaselineComparison
             if comparison.isEmpty {
-                emptyLabel("No per-Wahlperiode age comparison data available.")
+                emptyLabel("Keine Altersvergleichsdaten pro Wahlperiode verfügbar.")
             } else {
                 ForEach(Array(comparison.enumerated()), id: \.element.wahlperiode) { _, wpData in
                     AgeBaselineWPRow(wpData: wpData, isFirst: wpData.wahlperiode == comparison.first?.wahlperiode, isLast: wpData.wahlperiode == comparison.last?.wahlperiode)
@@ -103,15 +103,15 @@ private struct AgeBaselineWPRow: View {
                 Text("WP \(wpData.wahlperiode)")
                     .font(.subheadline.bold())
                 Spacer()
-                Text("\(wpData.totalMdB) MdBs · \(wpData.totalEvents) events")
+                Text("\(wpData.totalMdB) MdBs · \(wpData.totalEvents) Events")
                     .font(.caption)
                     .foregroundStyle(.tertiary)
             }
 
             let chartData: [(group: String, series: String, percent: Double)] = wpData.groups.flatMap { g in
                 [
-                    (group: g.group, series: "Parliament", percent: g.baselinePercent),
-                    (group: g.group, series: "Humor Events", percent: g.observedPercent)
+                    (group: g.group, series: "Parlament", percent: g.baselinePercent),
+                    (group: g.group, series: "Humor-Marker", percent: g.observedPercent)
                 ]
             }
             let indexed = Array(chartData.enumerated())
@@ -126,8 +126,8 @@ private struct AgeBaselineWPRow: View {
                 .position(by: .value("Series", item.series))
             }
             .chartForegroundStyleScale([
-                "Parliament": Color.gray.opacity(0.5),
-                "Humor Events": Color(red: 0.91, green: 0.55, blue: 0.34)
+                "Parlament": Color.gray.opacity(0.5),
+                "Humor-Marker": Color(red: 0.91, green: 0.55, blue: 0.34)
             ])
             .chartLegend(isFirst ? .visible : .hidden)
             .chartYAxis {
@@ -156,15 +156,15 @@ private struct AgeByPartySection: View {
     let vm: VisualizationViewModel
 
     var body: some View {
-        ChartSection(title: "Average Speaker Age by Party", subtitle: "Mean age of humor-triggering speakers per party (top 8)") {
+        ChartSection(title: "Durchschnittsalter nach Partei", subtitle: "Mittleres Alter der humorauslösenden Redner pro Partei (Top 8)") {
             let data = vm.ageByParty
             if data.isEmpty {
-                emptyLabel("No per-party age data available.")
+                emptyLabel("Keine Altersdaten pro Partei verfügbar.")
             } else {
                 Chart(data, id: \.party) { item in
                     BarMark(
-                        x: .value("Avg Age", item.averageAge),
-                        y: .value("Party", item.party)
+                        x: .value("Durchschnittsalter", item.averageAge),
+                        y: .value("Partei", item.party)
                     )
                     .foregroundStyle(partyColor(item.party))
                     .annotation(position: .trailing) {
@@ -187,7 +187,7 @@ private struct AgeGroupByPartySection: View {
 
     private var ageGroupColorScale: KeyValuePairs<String, Color> {
         [
-            "Under 30": Color(red: 0.40, green: 0.76, blue: 0.65),
+            "Unter 30": Color(red: 0.40, green: 0.76, blue: 0.65),
             "30–39": Color(red: 0.55, green: 0.63, blue: 0.80),
             "40–49": Color(red: 0.90, green: 0.77, blue: 0.46),
             "50–59": Color(red: 0.91, green: 0.55, blue: 0.34),
@@ -197,19 +197,19 @@ private struct AgeGroupByPartySection: View {
     }
 
     var body: some View {
-        ChartSection(title: "Age Group Distribution by Party", subtitle: "Age composition of humor-triggering speakers per party (top 8)") {
+        ChartSection(title: "Altersgruppen nach Partei", subtitle: "Alterszusammensetzung der humorauslösenden Redner pro Partei (Top 8)") {
             let data = vm.ageGroupByParty
             if data.isEmpty {
-                emptyLabel("No per-party age data available.")
+                emptyLabel("Keine Altersdaten pro Partei verfügbar.")
             } else {
                 let indexed = Array(data.enumerated())
                 Chart(indexed, id: \.offset) { pair in
                     let item = pair.element
                     BarMark(
-                        x: .value("Party", item.party),
-                        y: .value("Count", item.count)
+                        x: .value("Partei", item.party),
+                        y: .value("Anzahl", item.count)
                     )
-                    .foregroundStyle(by: .value("Age Group", item.group))
+                    .foregroundStyle(by: .value("Altersgruppe", item.group))
                 }
                 .chartForegroundStyleScale(ageGroupColorScale)
                 .chartLegend(position: .bottom, alignment: .leading)
@@ -229,7 +229,7 @@ private struct AgeByIntentionSection: View {
 
     private var ageGroupColorScale: KeyValuePairs<String, Color> {
         [
-            "Under 30": Color(red: 0.40, green: 0.76, blue: 0.65),
+            "Unter 30": Color(red: 0.40, green: 0.76, blue: 0.65),
             "30–39": Color(red: 0.55, green: 0.63, blue: 0.80),
             "40–49": Color(red: 0.90, green: 0.77, blue: 0.46),
             "50–59": Color(red: 0.91, green: 0.55, blue: 0.34),
@@ -239,20 +239,20 @@ private struct AgeByIntentionSection: View {
     }
 
     var body: some View {
-        ChartSection(title: "Humor Intention by Age Group", subtitle: "Do different age groups trigger different humor types? (classified events only)") {
+        ChartSection(title: "Humorintention nach Altersgruppe", subtitle: "Lösen verschiedene Altersgruppen unterschiedliche Humortypen aus? (nur klassifizierte Events)") {
             let data = vm.ageByIntention
             if data.isEmpty {
-                emptyLabel("No classified age data. Run Phase 3 to classify humor events first.")
+                emptyLabel("Keine klassifizierten Altersdaten. Führen Sie zuerst Phase 3 aus, um Humorereignisse zu klassifizieren.")
             } else {
                 let indexed = Array(data.enumerated())
                 Chart(indexed, id: \.offset) { pair in
                     let item = pair.element
                     BarMark(
-                        x: .value("Count", item.count),
+                        x: .value("Anzahl", item.count),
                         y: .value("Intention", item.intention.rawValue)
                     )
-                    .foregroundStyle(by: .value("Age Group", item.group))
-                    .position(by: .value("Age Group", item.group))
+                    .foregroundStyle(by: .value("Altersgruppe", item.group))
+                    .position(by: .value("Altersgruppe", item.group))
                 }
                 .chartForegroundStyleScale(ageGroupColorScale)
                 .chartLegend(position: .bottom, alignment: .leading)
@@ -275,10 +275,10 @@ private struct AgeTrendSection: View {
     }()
 
     var body: some View {
-        ChartSection(title: "Average Speaker Age Over Time", subtitle: "Monthly mean age of humor-triggering speakers · vertical line marks AfD entry (Oct 2017)") {
+        ChartSection(title: "Durchschnittsalter im Zeitverlauf", subtitle: "Monatliches Durchschnittsalter der humorauslösenden Redner · vertikale Linie markiert AfD-Eintritt (Okt. 2017)") {
             let data = vm.ageTemporalData
             if data.isEmpty {
-                emptyLabel("No temporal age data available.")
+                emptyLabel("Keine zeitlichen Altersdaten verfügbar.")
             } else {
                 AgeTrendChart(data: data, afdEntry: afdEntry)
             }
@@ -320,7 +320,7 @@ private struct AgeTrendChart: View {
                     .lineStyle(StrokeStyle(lineWidth: 1.5, dash: [5, 3]))
                     .foregroundStyle(.orange)
                     .annotation(position: .top, alignment: .leading, spacing: 4) {
-                        Text("AfD entry\nOct 2017")
+                        Text("AfD-Eintritt\nOkt. 2017")
                             .font(.caption2)
                             .foregroundStyle(.orange)
                             .multilineTextAlignment(.leading)

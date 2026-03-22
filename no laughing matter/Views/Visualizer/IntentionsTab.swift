@@ -20,7 +20,7 @@ struct IntentionsTab: View {
                 HStack(spacing: 8) {
                     Image(systemName: "brain")
                         .foregroundStyle(classified < total ? .orange : .secondary)
-                    Text("Based on \(classified) of \(total) events with LLM classification")
+                    Text("Basierend auf \(classified) von \(total) Events mit LLM-Klassifikation")
                         .font(.callout)
                         .foregroundStyle(classified < total ? .orange : .secondary)
                 }
@@ -37,16 +37,16 @@ struct IntentionsTab: View {
                     Image(systemName: "brain")
                         .font(.system(size: 36))
                         .foregroundStyle(.secondary)
-                    Text("No classification data")
+                    Text("Keine Klassifikationsdaten")
                         .font(.headline)
-                    Text("Run Phase 3 (LLM Classifier) to get humor intention classifications.")
+                    Text("Führen Sie Phase 3 (LLM-Klassifikation) aus, um Humorintentionen zu klassifizieren.")
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 48)
             } else {
-                ChartSection(title: "Overall Humor Intention Distribution", subtitle: "Classified events only") {
+                ChartSection(title: "Gesamtverteilung der Humorintentionen", subtitle: "Nur klassifizierte Events") {
                     Chart(vm.intentionCounts, id: \.intention) { item in
                         BarMark(
                             x: .value("Count", item.count),
@@ -63,10 +63,10 @@ struct IntentionsTab: View {
                     .frame(height: CGFloat(vm.intentionCounts.count) * 36 + 20)
                 }
 
-                ChartSection(title: "Intention by Fraktion", subtitle: "Top 8 laughing parties — stacked by classified intention") {
+                ChartSection(title: "Intention nach Fraktion", subtitle: "Klassifizierte Intentionen nach Partei") {
                     let data = vm.intentionByFraktion
                     if data.isEmpty {
-                        emptyLabel("No per-party intention data.")
+                        emptyLabel("Keine Intentionsdaten pro Fraktion verfügbar.")
                     } else {
                         let indexed = Array(data.enumerated())
                         Chart(indexed, id: \.offset) { pair in
@@ -85,14 +85,80 @@ struct IntentionsTab: View {
                             }
                         }
                         .frame(height: 280)
+
+                        // Percentage breakdown table
+                        let orderedParties: [String] = {
+                            var seen = Set<String>()
+                            return data.compactMap { item in
+                                if seen.contains(item.party) { return nil }
+                                seen.insert(item.party)
+                                return item.party
+                            }
+                        }()
+
+                        VStack(alignment: .leading, spacing: 0) {
+                            // Header row
+                            HStack(spacing: 0) {
+                                Text("")
+                                    .frame(width: 90, alignment: .leading)
+                                ForEach(orderedParties, id: \.self) { party in
+                                    Text(party)
+                                        .font(.caption2.bold())
+                                        .frame(maxWidth: .infinity)
+                                }
+                            }
+                            .padding(.vertical, 4)
+                            .background(Color.secondary.opacity(0.08))
+
+                            // One row per intention
+                            ForEach(HumorIntention.allCases, id: \.self) { intention in
+                                HStack(spacing: 0) {
+                                    HStack(spacing: 4) {
+                                        Circle()
+                                            .fill(intentionColor(intention))
+                                            .frame(width: 6, height: 6)
+                                        Text(intention.rawValue)
+                                            .font(.caption2)
+                                    }
+                                    .frame(width: 90, alignment: .leading)
+
+                                    ForEach(orderedParties, id: \.self) { party in
+                                        let partyTotal = data.filter { $0.party == party }.reduce(0) { $0 + $1.count }
+                                        let count = data.first(where: { $0.party == party && $0.intention == intention })?.count ?? 0
+                                        let pct = partyTotal > 0 ? Double(count) / Double(partyTotal) * 100 : 0
+                                        Text(count > 0 ? "\(pct, specifier: "%.0f")%" : "–")
+                                            .font(.caption2.monospacedDigit())
+                                            .foregroundStyle(count > 0 ? .primary : .quaternary)
+                                            .frame(maxWidth: .infinity)
+                                    }
+                                }
+                                .padding(.vertical, 2)
+                            }
+
+                            // Total row
+                            HStack(spacing: 0) {
+                                Text("Gesamt")
+                                    .font(.caption2.bold())
+                                    .frame(width: 90, alignment: .leading)
+                                ForEach(orderedParties, id: \.self) { party in
+                                    let partyTotal = data.filter { $0.party == party }.reduce(0) { $0 + $1.count }
+                                    Text("\(partyTotal)")
+                                        .font(.caption2.bold().monospacedDigit())
+                                        .frame(maxWidth: .infinity)
+                                }
+                            }
+                            .padding(.vertical, 4)
+                            .background(Color.secondary.opacity(0.05))
+                        }
+                        .padding(.top, 8)
                     }
                 }
 
                 // Per-Wahlperiode intention pie charts
-                ChartSection(title: "Intention by Wahlperiode", subtitle: "Intention distribution per legislative period (classified events)") {
+                ChartSection(title: "Intention nach Wahlperiode", subtitle: "Intentionsverteilung pro Legislaturperiode (klassifizierte Events)") {
                     let byWP = vm.intentionByWahlperiode
                     if byWP.isEmpty {
-                        emptyLabel("No per-Wahlperiode intention data.")
+                        emptyLabel("Keine Intentionsdaten pro Wahlperiode verfügbar.")
                     } else {
                         let wahlperioden = Array(Set(byWP.map(\.wahlperiode))).sorted()
                         let pieColumns = Array(repeating: GridItem(.flexible(), spacing: 24), count: min(wahlperioden.count, 6))
@@ -114,7 +180,7 @@ struct IntentionsTab: View {
 
                                     Text("WP \(wp)")
                                         .font(.caption.bold())
-                                    Text("\(total) events")
+                                    Text("\(total) Events")
                                         .font(.caption2)
                                         .foregroundStyle(.secondary)
                                 }

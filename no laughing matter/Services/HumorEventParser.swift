@@ -182,6 +182,7 @@ final class HumorEventParser {
         "AfD",
         "FDP",
         "DIE LINKE",
+        "Linken",
         "LINKEN",
         "BÜNDNIS 90/DIE GRÜNEN",
         "BÜNDNISSES 90/DIE GRÜNEN",
@@ -196,7 +197,7 @@ final class HumorEventParser {
         switch party {
         case "CDU/CSU":
             return "CDU/CSU"
-        case "LINKEN", "DIE LINKE":
+        case "Linken", "LINKEN", "DIE LINKE":
             return "DIE LINKE"
         case "GRÜNEN", "BÜNDNISSES 90/DIE GRÜNEN", "BÜNDNIS 90/DIE GRÜNEN":
             return "BÜNDNIS 90/DIE GRÜNEN"

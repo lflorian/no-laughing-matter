@@ -130,11 +130,11 @@ final class SpeakerDirectory {
     }
 
     /// Age group labels used for bucketing (shared with VisualizerView)
-    static let ageGroupOrder = ["Under 30", "30–39", "40–49", "50–59", "60–69", "70+"]
+    static let ageGroupOrder = ["Unter 30", "30–39", "40–49", "50–59", "60–69", "70+"]
 
     static func ageGroupLabel(for age: Int) -> String {
         switch age {
-        case ..<30: return "Under 30"
+        case ..<30: return "Unter 30"
         case 30..<40: return "30–39"
         case 40..<50: return "40–49"
         case 50..<60: return "50–59"

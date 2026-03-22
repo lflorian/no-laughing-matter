@@ -15,26 +15,26 @@ struct WhoLaughsTab: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 24) {
             HStack {
-                Toggle("Normalize by seats", isOn: $showNormalized)
+                Toggle("Nach Sitzen normalisieren", isOn: $showNormalized)
                     .toggleStyle(.switch)
                     .controlSize(.small)
                 Spacer()
             }
 
             ChartSection(
-                title: "Top Laughing Fraktionen",
+                title: "Reagierende Fraktionen",
                 subtitle: showNormalized
-                    ? "Laugh events per seat (normalized by average faction size)"
-                    : "How often each party is recorded as laughing"
+                    ? "Humor-Marker pro Sitz (normalisiert nach durchschnittlicher Fraktionsgröße)"
+                    : "Häufigkeit von Humor-Events einer Fraktion"
             ) {
                 if showNormalized {
                     let data = Array(vm.laughingFraktionCountsNormalized.prefix(12))
                     if data.isEmpty {
-                        emptyLabel("No laughing-party data found or seat data unavailable.")
+                        emptyLabel("Keine Fraktionsdaten gefunden oder Sitzdaten nicht verfügbar.")
                     } else {
                         Chart(data, id: \.party) { item in
                             BarMark(
-                                x: .value("Per Seat", item.rate),
+                                x: .value("Pro Sitz", item.rate),
                                 y: .value("Fraktion", item.party)
                             )
                             .foregroundStyle(partyColor(item.party))
@@ -50,7 +50,7 @@ struct WhoLaughsTab: View {
                 } else {
                     let data = Array(vm.laughingFraktionCounts.prefix(12))
                     if data.isEmpty {
-                        emptyLabel("No laughing-party data found. Protocols may lack party annotations in Kommentar tags.")
+                        emptyLabel("Keine Fraktionsdaten gefunden. Protokolle enthalten möglicherweise keine Fraktionsangaben in Kommentar-Tags.")
                     } else {
                         Chart(data, id: \.party) { item in
                             BarMark(
@@ -70,10 +70,10 @@ struct WhoLaughsTab: View {
                 }
             }
 
-            ChartSection(title: "Top Laughing Individuals", subtitle: "Top 20 individually named people recorded as laughing") {
+            ChartSection(title: "Reagierende Einzelpersonen", subtitle: "MdB im Zusammenhang mit Lachen und Heiterkeit im Protokoll") {
                 let data = Array(vm.laughingIndividualCounts.prefix(20))
                 if data.isEmpty {
-                    emptyLabel("No individually named laughers found. Most events are not associated with individuals.")
+                    emptyLabel("Keine namentlich genannten Lacher gefunden. Die meisten Events sind nicht mit Einzelpersonen verknüpft.")
                 } else {
                     Chart(data, id: \.name) { item in
                         BarMark(

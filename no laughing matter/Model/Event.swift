@@ -93,8 +93,8 @@ enum HumorType: String, Codable, CaseIterable {
 
     var description: String {
         switch self {
-        case .heiterkeit: "Heiterkeit (Amusement)"
-        case .lachen: "Lachen (Laughing)"
+        case .heiterkeit: "Heiterkeit"
+        case .lachen: "Lachen"
         }
     }
 }

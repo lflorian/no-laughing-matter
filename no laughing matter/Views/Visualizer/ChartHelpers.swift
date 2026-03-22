@@ -78,7 +78,7 @@ func abbreviate(_ party: String) -> String {
     case "Die Linke":              return "Linke"
     case "BSW":                    return "BSW"
     case "SSW":                    return "SSW"
-    case "fraktionslos":           return "frakti."
+    case "Fraktionslos":           return "frktls."
     default:
         let p = normalizeParty(party)
         return p.count > 9 ? String(p.prefix(8)) + "…" : p
